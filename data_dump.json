@@ -1,0 +1,71 @@
+{
+    "users": [
+        {
+            "id": 1,
+            "name": "System Administrator",
+            "username": "admin@medlink.com",
+            "role": "admin",
+            "email": null,
+            "phone": null
+        },
+        {
+            "id": 2,
+            "name": "Test Pharmacy",
+            "username": "testpharmacy",
+            "role": "pharmacy",
+            "email": "test@pharmacy.com",
+            "phone": null
+        },
+        {
+            "id": 3,
+            "name": "Super Admin",
+            "username": "admin",
+            "role": "admin",
+            "email": null,
+            "phone": null
+        },
+        {
+            "id": 4,
+            "name": "admin1",
+            "username": "aniyankuttan8848@gmail.com",
+            "role": "sub_admin",
+            "email": null,
+            "phone": null
+        },
+        {
+            "id": 5,
+            "name": "A\u03bas\u043d\u1d00\u028f",
+            "username": "akshaydott",
+            "role": "patient",
+            "email": "akshaycr001@gmail.com",
+            "phone": "765432198"
+        },
+        {
+            "id": 6,
+            "name": "A\u03bas\u043d\u1d00",
+            "username": "nandutty",
+            "role": "patient",
+            "email": "akshaycr001@gmail.com",
+            "phone": "6565656556"
+        },
+        {
+            "id": 7,
+            "name": "nandu",
+            "username": "nanduu",
+            "role": "patient",
+            "email": "appu123@gmail.com",
+            "phone": "123456789"
+        },
+        {
+            "id": 8,
+            "name": "gthh5h",
+            "username": "hgty6",
+            "role": "patient",
+            "email": "rajancp947@gmail.com",
+            "phone": "5656757878"
+        }
+    ],
+    "pharmacies": [],
+    "medicines": [],
+    "ambulances": []
+}

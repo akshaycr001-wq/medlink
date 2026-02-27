@@ -1,0 +1,32 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="hero">
+    <div class="container">
+        <h1>Find Medicines in Emergencies</h1>
+        <p style="color: var(--text-muted); font-size: 1.25rem;">Real-time availability across local pharmacies.</p>
+
+        <div class="search-box">
+            <input type="text" id="medicine-search" class="search-input"
+                placeholder="Enter medicine name (e.g. Dolo 650)...">
+            <button id="search-btn" class="btn btn-primary">Search</button>
+        </div>
+
+        <button id="sos-btn" class="btn btn-danger" style="margin-top: 1rem;">
+            <i class="fas fa-ambulance"></i> EMERGENCY BROADCAST
+        </button>
+        <p style="margin-top: 0.5rem; font-size: 0.8rem; color: var(--secondary);">*Notifies all nearby pharmacies &
+            ambulances immediately</p>
+    </div>
+</div>
+
+<div class="container">
+    <h2 style="margin-bottom: 1.5rem;">Search Results</h2>
+    <div id="search-results" class="grid">
+        <!-- Results injected by JS -->
+        <div style="grid-column: 1 / -1; text-align: center; color: var(--text-muted); padding: 2rem;">
+            Start typing to find nearby medicines...
+        </div>
+    </div>
+</div>
+{% endblock %}

@@ -1,0 +1,51 @@
+{% extends "base.html" %}
+
+{% block title %}Manage Medicines | MedLink{% endblock %}
+
+{% block content %}
+<div class="container" style="margin-top: 2rem;">
+    <div class="dashboard-header" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem;">
+        <h1>Manage Medicines</h1>
+        <div style="display: flex; gap: 0.5rem;">
+            <a href="{{ url_for('add_medicine') }}" class="btn btn-primary" style="text-decoration: none;">Add Medicine</a>
+            <a href="{{ url_for('admin_dashboard') }}" class="btn" style="text-decoration: none;">Back to Dashboard</a>
+        </div>
+    </div>
+
+    {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+            {% for category, msg in messages %}
+                <div class="mb-4 p-3 rounded-xl {{ 'bg-green-100 text-green-800' if category == 'success' else 'bg-red-100 text-red-800' }}">{{ msg }}</div>
+            {% endfor %}
+        {% endif %}
+    {% endwith %}
+
+    <div class="card">
+        <h3>All Medicines ({{ medicines|length }})</h3>
+        <table style="width: 100%; border-collapse: collapse; margin-top: 1rem;">
+            <thead>
+                <tr style="border-bottom: 2px solid #eee; text-align: left;">
+                    <th style="padding: 0.75rem;">Name</th>
+                    <th style="padding: 0.75rem;">Generic Name</th>
+                    <th style="padding: 0.75rem;">Manufacturer</th>
+                    <th style="padding: 0.75rem;">Description</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for m in medicines %}
+                <tr style="border-bottom: 1px solid #f1f5f9;">
+                    <td style="padding: 0.75rem;">{{ m.name }}</td>
+                    <td style="padding: 0.75rem;">{{ m.generic_name or '-' }}</td>
+                    <td style="padding: 0.75rem;">{{ m.manufacturer or '-' }}</td>
+                    <td style="padding: 0.75rem;">{{ m.description or '-' }}</td>
+                </tr>
+                {% else %}
+                <tr>
+                    <td colspan="4" style="padding: 2rem; text-align: center; color: var(--text-muted);">No medicines found.</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}

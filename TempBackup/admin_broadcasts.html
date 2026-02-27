@@ -1,0 +1,42 @@
+{% extends "base.html" %}
+
+{% block title %}Monitor Broadcasts | MedLink{% endblock %}
+
+{% block content %}
+<div class="container" style="margin-top: 2rem;">
+    <div class="dashboard-header" style="display: flex; justify-content: space-between; align-items: center;">
+        <h1>Monitor Broadcasts (SOS)</h1>
+        <a href="{{ url_for('admin_dashboard') }}" class="btn" style="text-decoration: none;">Back to Dashboard</a>
+    </div>
+
+    {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+            {% for category, msg in messages %}
+                <div class="mb-4 p-3 rounded-xl bg-green-100 text-green-800">{{ msg }}</div>
+            {% endfor %}
+        {% endif %}
+    {% endwith %}
+
+    <div class="card">
+        <h3>Emergency Requests ({{ emergencies|length }})</h3>
+        <div class="space-y-4" style="margin-top: 1rem;">
+            {% for req in emergencies %}
+            <div style="border-left: 4px solid {% if req.status == 'open' %}var(--secondary){% else %}#22c55e{% endif %}; padding-left: 1rem; padding: 1rem; background: #f8fafc; border-radius: 0.5rem; margin-bottom: 1rem;">
+                <p class="font-bold text-slate-800">{{ req.message }}</p>
+                <p class="text-sm text-slate-500">User ID #{{ req.user_id }} • {{ req.timestamp.strftime('%d %b %Y, %I:%M %p') }}</p>
+                <div style="display: flex; align-items: center; gap: 0.5rem; margin-top: 0.5rem; flex-wrap: wrap;">
+                    <span class="inline-block px-2 py-0.5 rounded text-xs font-bold {{ 'bg-orange-100 text-orange-700' if req.status == 'open' else 'bg-green-100 text-green-700' }}">{{ req.status }}</span>
+                    {% if req.status == 'open' %}
+                    <form action="{{ url_for('resolve_broadcast', id=req.id) }}" method="POST" style="display:inline;">
+                        <button type="submit" class="btn btn-primary" style="padding: 0.25rem 0.5rem; font-size: 0.75rem;">Mark Resolved</button>
+                    </form>
+                    {% endif %}
+                </div>
+            </div>
+            {% else %}
+            <p style="padding: 2rem; text-align: center; color: var(--text-muted);">No emergency broadcasts yet.</p>
+            {% endfor %}
+        </div>
+    </div>
+</div>
+{% endblock %}

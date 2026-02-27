@@ -1,0 +1,221 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MedLink | Patient Terminal</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script defer src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;700;800&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Plus Jakarta Sans', sans-serif; background-color: #F8FAFC; }
+        .teal-gradient { background: linear-gradient(135deg, #0F766E 0%, #14B8A6 100%); }
+        [x-cloak] { display: none !important; }
+    </style>
+</head>
+<body x-data="patientApp()" x-init="init()" class="text-slate-700">
+
+    <nav class="bg-white border-b border-slate-200 sticky top-0 z-50">
+        <div class="max-w-7xl mx-auto px-6 h-16 flex justify-between items-center">
+            <div class="flex items-center space-x-2">
+                <div class="w-10 h-10 teal-gradient rounded-xl flex items-center justify-center text-white shadow-lg">
+                    <i class="fas fa-plus-medical"></i>
+                </div>
+                <span class="text-2xl font-black text-slate-800 tracking-tight">MedLink</span>
+            </div>
+            <div class="flex items-center gap-6">
+                <span class="hidden md:inline text-sm font-bold text-slate-500 uppercase tracking-widest" x-text="'Welcome, ' + user.name"></span>
+                <button @click="logout()" class="text-slate-400 hover:text-red-500 transition-colors">
+                    <i class="fas fa-power-off text-xl"></i>
+                </button>
+            </div>
+        </div>
+    </nav>
+
+    <main class="max-w-7xl mx-auto px-6 py-8">
+        
+        <div class="mb-10 bg-white rounded-[2.5rem] p-8 shadow-xl shadow-red-500/5 border-2 border-red-50 flex flex-col md:flex-row items-center justify-between gap-6">
+            <div class="flex items-center space-x-6">
+                <div class="w-20 h-20 bg-red-100 rounded-full flex items-center justify-center animate-pulse">
+                    <i class="fas fa-satellite-dish text-red-600 text-3xl"></i>
+                </div>
+                <div>
+                    <h2 class="text-2xl font-black text-slate-900">Emergency Broadcast</h2>
+                    <p class="text-slate-500 font-medium">Instantly notify all pharmacies within 5km[cite: 5, 21].</p>
+                </div>
+            </div>
+            <div class="flex flex-col w-full md:w-auto gap-3">
+                <input x-model="sosMsg" type="text" placeholder="Medicine Name Needed..." 
+                       class="px-6 py-4 bg-slate-50 border border-slate-200 rounded-2xl outline-none focus:border-red-500 transition-all font-bold">
+                <button @click="sendSOS()" class="px-10 py-5 bg-red-500 hover:bg-red-600 text-white rounded-2xl font-black shadow-lg shadow-red-200 transition-all active:scale-95 uppercase text-xs tracking-widest">
+                    Broadcast SOS
+                </button>
+            </div>
+        </div>
+
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+            <div class="lg:col-span-2 space-y-8">
+                
+                <div class="bg-white rounded-[2.5rem] p-10 shadow-sm border border-slate-100">
+                    <h3 class="text-xl font-black mb-6 flex items-center space-x-3">
+                        <i class="fas fa-search text-teal-600"></i>
+                        <span>Medicine Stock Enquiry</span>
+                    </h3>
+                    <div class="relative mb-8">
+                        <input type="text" x-model="query" @input="filterMeds()" 
+                               [cite_start]placeholder="Search brand or generic name[cite: 11, 12]..." 
+                               class="w-full pl-14 pr-6 py-5 bg-slate-50 border border-slate-100 rounded-[1.5rem] focus:ring-4 focus:ring-teal-500/10 focus:border-teal-500 outline-none transition-all font-bold">
+                        <i class="fas fa-pills absolute left-6 top-1/2 -translate-y-1/2 text-slate-300"></i>
+                    </div>
+
+                    <div x-show="results.length > 0" x-cloak class="mt-8 space-y-4">
+                        <template x-for="res in results" :key="res.id">
+                            <div class="p-6 bg-slate-50 rounded-3xl border border-transparent hover:bg-white hover:shadow-lg transition-all space-y-4 group">
+                                <div class="flex justify-between items-start">
+                                    <div>
+                                        <h4 class="font-black text-slate-900 text-lg" x-text="res.name"></h4>
+                                        <p class="text-[10px] text-teal-600 font-black uppercase tracking-widest" x-text="res.pharmacy"></p>
+                                    </div>
+                                    <div class="text-right">
+                                        <p class="text-2xl font-black text-slate-900" x-text="'₹' + res.price"></p>
+                                        <p class="text-[10px] font-black text-slate-400 mt-1" x-text="res.dist + ' km away'"></p>
+                                    </div>
+                                </div>
+                                
+                                <div class="flex flex-wrap gap-2 pt-2 border-t border-slate-100">
+                                    <a :href="'tel:' + res.phone" class="px-4 py-2 bg-white border border-slate-200 rounded-xl text-[10px] font-black uppercase tracking-widest hover:text-teal-600 transition-all">
+                                        <i class="fas fa-phone mr-1"></i> Call Store 
+                                    </a>
+                                    <a :href="'https://wa.me/' + res.phone + '?text=Is ' + res.name + ' available?'" target="_blank" class="px-4 py-2 bg-white border border-slate-200 rounded-xl text-[10px] font-black uppercase tracking-widest hover:text-green-600 transition-all">
+                                        <i class="fab fa-whatsapp mr-1"></i> Enquiry 
+                                    </a>
+                                    <button @click="openReview(res)" class="px-4 py-2 bg-white border border-slate-200 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-slate-900 hover:text-white transition-all">
+                                        <i class="fas fa-star text-amber-400 mr-1"></i> Rate Pharmacy
+                                    </button>
+                                </div>
+                            </div>
+                        </template>
+                    </div>
+                </div>
+
+                <div class="bg-white rounded-[2.5rem] p-10 shadow-sm border border-slate-100">
+                    <h3 class="text-xl font-black mb-8 flex items-center space-x-3">
+                        <i class="fas fa-hospital-user text-teal-600"></i>
+                        <span>Hospitals & Ambulances (5km) </span>
+                    </h3>
+                    <div class="space-y-6">
+                        <template x-for="hosp in hospitals" :key="hosp.id">
+                            <div class="p-6 border border-slate-100 rounded-3xl bg-slate-50/50">
+                                <div class="flex justify-between items-start mb-6">
+                                    <div>
+                                        <h4 class="font-black text-slate-800 text-lg" x-text="hosp.name"></h4>
+                                        <p class="text-xs text-slate-400 font-bold uppercase tracking-tighter" x-text="'Hosp: ' + hosp.phone"></p>
+                                    </div>
+                                    <a :href="'https://www.google.com/maps/search/' + encodeURIComponent(hosp.name)" 
+                                       target="_blank" 
+                                       class="px-4 py-2 bg-teal-600 text-white rounded-xl text-[10px] font-black uppercase tracking-widest shadow-md hover:bg-teal-700 transition-all">
+                                        <i class="fas fa-location-dot mr-1"></i> Maps 
+                                    </a>
+                                </div>
+                                
+                                <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                    <div class="p-4 bg-white rounded-2xl shadow-sm border border-slate-100 flex items-center justify-between">
+                                        <div>
+                                            <p class="text-[9px] font-black text-slate-400 uppercase">Ambulance Desk</p>
+                                            <p class="text-xs font-bold text-slate-800" x-text="hosp.ambulance_no"></p>
+                                        </div>
+                                        <a :href="'tel:' + hosp.ambulance_no" class="w-8 h-8 flex items-center justify-center bg-red-50 text-red-600 rounded-lg"><i class="fas fa-phone"></i></a>
+                                    </div>
+                                    <div class="p-4 bg-white rounded-2xl shadow-sm border border-slate-100 flex items-center justify-between">
+                                        <div>
+                                            <p class="text-[9px] font-black text-slate-400 uppercase" x-text="'Driver: ' + hosp.driver_name"></p>
+                                            <p class="text-xs font-bold text-slate-800" x-text="hosp.driver_no"></p>
+                                        </div>
+                                        <a :href="'tel:' + hosp.driver_no" class="w-8 h-8 flex items-center justify-center bg-slate-100 text-slate-600 rounded-lg"><i class="fas fa-phone"></i></a>
+                                    </div>
+                                </div>
+                            </div>
+                        </template>
+                    </div>
+                </div>
+            </div>
+
+            <div class="space-y-8">
+                <div class="teal-gradient rounded-[2.5rem] p-10 shadow-xl text-white">
+                    <h3 class="text-xl font-black mb-4">Network Safety</h3>
+                    <p class="text-sm font-medium opacity-80 mb-6 leading-relaxed">Connecting you to verified hospitals and ambulances within your radius.</p>
+                    <div class="space-y-3 pt-4 border-t border-white/20">
+                        <div class="flex justify-between text-xs font-bold uppercase tracking-widest">
+                            <span>Nearby Hospitals</span>
+                            <span x-text="hospitals.length"></span>
+                        </div>
+                        <div class="flex justify-between text-xs font-bold uppercase tracking-widest">
+                            <span>Active Radius</span>
+                            <span>5 km</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <div x-show="reviewModal" x-cloak class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[100] flex items-center justify-center p-6">
+        <div class="bg-white rounded-[3rem] max-w-md w-full p-10 animate-in zoom-in duration-300">
+            <h2 class="text-2xl font-black text-slate-900 mb-2">Rate <span x-text="selectedPharma.pharmacy"></span></h2>
+            <p class="text-slate-500 text-sm mb-6 font-medium">Your feedback helps others find reliable pharmacies.</p>
+            
+            <div class="flex justify-center gap-2 mb-8 text-2xl text-amber-400">
+                <template x-for="i in 5">
+                    <i class="cursor-pointer" :class="i <= rating ? 'fas fa-star' : 'far fa-star'" @click="rating = i"></i>
+                </template>
+            </div>
+
+            <textarea x-model="reviewText" placeholder="Write your experience..." class="w-full p-5 bg-slate-50 border border-slate-200 rounded-2xl outline-none focus:border-teal-500 font-medium text-sm h-32 mb-6"></textarea>
+            
+            <div class="grid grid-cols-2 gap-4">
+                <button @click="reviewModal = false" class="py-4 bg-slate-100 text-slate-600 rounded-2xl font-black uppercase text-xs tracking-widest hover:bg-slate-200">Cancel</button>
+                <button @click="submitReview()" class="py-4 teal-gradient text-white rounded-2xl font-black uppercase text-xs tracking-widest shadow-lg shadow-teal-700/20">Submit</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        function patientApp() {
+            return {
+                user: { name: 'Akshayraj CR' },
+                query: '', sosMsg: '', results: [], reviewModal: false,
+                selectedPharma: {}, rating: 5, reviewText: '',
+                hospitals: [
+                    { id: 1, name: 'Muvattupuzha General Hospital', phone: '0485-2832345', ambulance_no: '919988776655', driver_name: 'Suresh K.', driver_no: '919000112233', distance: 1.2 },
+                    { id: 2, name: 'St. Marys Hospital', phone: '0485-2822554', ambulance_no: '918877665544', driver_name: 'Anil Das', driver_no: '919000445566', distance: 3.5 }
+                ],
+                meds: [
+                    { id: 1, name: 'Dolo 650', pharmacy: 'City Pharma', price: 35, dist: 0.8, phone: '919876543210' },
+                    { id: 2, name: 'Calpol 500', pharmacy: 'Life Meds', price: 30, dist: 1.5, phone: '919876543211' }
+                ],
+                init() { console.log('Terminal Ready'); },
+                filterMeds() {
+                    if (this.query.length < 2) { this.results = []; return; }
+                    this.results = this.meds.filter(m => m.name.toLowerCase().includes(this.query.toLowerCase()));
+                },
+                sendSOS() { 
+                    if(!this.sosMsg) return alert('Enter medicine name');
+                    alert('SOS Broadcasted to all pharmacies within 5km!'); 
+                    this.sosMsg = ''; 
+                },
+                openReview(pharma) {
+                    this.selectedPharma = pharma;
+                    this.reviewModal = true;
+                },
+                submitReview() {
+                    alert(`Review submitted for ${this.selectedPharma.pharmacy} with ${this.rating} stars!`);
+                    this.reviewModal = false;
+                    this.reviewText = '';
+                },
+                logout() { if(confirm('Logout from MedLink?')) window.location.href = '/logout'; }
+            }
+        }
+    </script>
+</body>
+</html>

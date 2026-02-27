@@ -1,0 +1,41 @@
+{% extends "base.html" %}
+
+{% block title %}Add Admin | MedLink{% endblock %}
+
+{% block content %}
+<div class="container" style="margin-top: 2rem;">
+    <div class="dashboard-header" style="display: flex; justify-content: space-between; align-items: center;">
+        <h1>Add Admin</h1>
+        <a href="{{ url_for('admin_dashboard') }}" class="btn" style="text-decoration: none;">Back to Dashboard</a>
+    </div>
+
+    {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+            {% for category, msg in messages %}
+                <div class="mb-4 p-3 rounded-xl {{ 'bg-red-100 text-red-800' if category == 'error' else 'bg-green-100 text-green-800' }}">{{ msg }}</div>
+            {% endfor %}
+        {% endif %}
+    {% endwith %}
+
+    <div class="card" style="max-width: 500px;">
+        <form method="POST" action="{{ url_for('add_admin') }}" class="space-y-4">
+            <div>
+                <label class="block text-sm font-bold text-slate-600 mb-1">Full Name</label>
+                <input type="text" name="name" required placeholder="Admin name"
+                       class="w-full px-4 py-3 border border-slate-200 rounded-lg focus:border-teal-500 focus:ring-1 focus:ring-teal-500 outline-none">
+            </div>
+            <div>
+                <label class="block text-sm font-bold text-slate-600 mb-1">Phone Number</label>
+                <input type="text" name="phone" required placeholder="e.g. 9999888877"
+                       class="w-full px-4 py-3 border border-slate-200 rounded-lg focus:border-teal-500 focus:ring-1 focus:ring-teal-500 outline-none">
+            </div>
+            <div>
+                <label class="block text-sm font-bold text-slate-600 mb-1">Password</label>
+                <input type="password" name="password" required placeholder="Create password"
+                       class="w-full px-4 py-3 border border-slate-200 rounded-lg focus:border-teal-500 focus:ring-1 focus:ring-teal-500 outline-none">
+            </div>
+            <button type="submit" class="btn btn-primary">Add Admin</button>
+        </form>
+    </div>
+</div>
+{% endblock %}
