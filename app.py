@@ -1,5 +1,6 @@
 from flask import Flask, render_template, request, redirect, url_for, flash, session, jsonify, send_from_directory
 from flask_sqlalchemy import SQLAlchemy
+from sqlalchemy import or_
 from flask_login import LoginManager, UserMixin, login_user, login_required, logout_user, current_user
 from flask_migrate import Migrate
 from flask_wtf.csrf import CSRFProtect
@@ -101,9 +102,9 @@ def index():
 @limiter.limit("5 per minute")  # Rate limit login attempts
 def login():
     if request.method == 'POST':
-        username = request.form.get('username')
+        identifier = request.form.get('identifier')
         password = request.form.get('password')
-        user = User.query.filter_by(username=username).first()
+        user = User.query.filter(or_(User.username == identifier, User.email == identifier)).first()
         
         if user:
             if check_password_hash(user.password, password):
@@ -124,7 +125,7 @@ def login():
             else:
                 flash('Incorrect password. Please try again or use Forgot Password.')
         else:
-            flash('Username not found. Please register or check your credentials.')
+            flash('Account not found. Please register or check your credentials.')
             
     return render_template('login.html')
 
