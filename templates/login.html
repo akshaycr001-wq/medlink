@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MedLink | Login</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script defer src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap"
+        rel="stylesheet">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <style>
+        body {
+            font-family: 'Plus Jakarta Sans', sans-serif;
+            background: radial-gradient(circle at top right, #f0fdfa, #f8fafc);
+        }
+
+        .glass-panel {
+            background: rgba(255, 255, 255, 0.8);
+            backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.3);
+        }
+
+        .input-focus:focus {
+            box-shadow: 0 0 0 4px rgba(15, 118, 110, 0.1);
+        }
+    </style>
+</head>
+
+<body class="min-h-screen flex items-center justify-center p-6">
+
+    <div class="w-full max-w-md animate-in fade-in zoom-in duration-500">
+        <div class="text-center mb-8">
+            <div class="inline-flex items-center gap-2 mb-2">
+                <div class="w-10 h-10 bg-teal-700 rounded-xl flex items-center justify-center text-white shadow-lg">
+                    <i class="fas fa-hand-holding-medical text-lg"></i>
+                </div>
+                <span class="text-2xl font-extrabold tracking-tight text-slate-900">Med<span
+                        class="text-teal-700">Link</span></span>
+            </div>
+        </div>
+
+        <div class="glass-panel rounded-[2.5rem] shadow-2xl shadow-slate-200/60 p-8 md:p-10">
+            {% with messages = get_flashed_messages() %}
+            {% if messages %}
+            <div class="mb-6 space-y-2">
+                {% for message in messages %}
+                <div
+                    class="p-4 bg-teal-50 border border-teal-100 text-teal-700 rounded-2xl text-xs font-bold animate-in slide-in-from-top duration-300">
+                    <i class="fas fa-info-circle mr-2"></i> {{ message }}
+                </div>
+                {% endfor %}
+            </div>
+            {% endif %}
+            {% endwith %}
+
+            <h1 class="text-2xl font-extrabold text-slate-900 mb-2">Welcome Back</h1>
+            <div class="flex justify-between items-center mb-8">
+                <p class="text-slate-400 text-sm font-medium">Login to manage your profile</p>
+                <a href="{{ url_for('forgot_password') }}"
+                    class="text-[10px] font-bold text-teal-700 hover:underline">Forgot Password?</a>
+            </div>
+
+            <form method="POST" action="{{ url_for('login') }}" class="space-y-6" x-data="{ show: false }">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <div class="space-y-2">
+                    <label class="block text-xs font-black text-slate-400 uppercase tracking-widest ml-1">Username /
+                        Email</label>
+                    <input type="text" name="username" required placeholder="name@company.com"
+                        class="w-full px-5 py-4 bg-slate-50 border-2 border-slate-100 rounded-2xl outline-none focus:border-teal-500 focus:bg-white transition-all font-medium input-focus">
+                </div>
+
+                <div class="space-y-2">
+                    <label class="block text-xs font-black text-slate-400 uppercase tracking-widest ml-1">Secure
+                        Access</label>
+                    <div class="relative">
+                        <input :type="show ? 'text' : 'password'" name="password" required placeholder="••••••••"
+                            class="w-full px-5 py-4 bg-slate-50 border-2 border-slate-100 rounded-2xl outline-none focus:border-teal-500 focus:bg-white transition-all font-medium input-focus pr-12">
+                        <button type="button" @click="show = !show"
+                            class="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 hover:text-teal-600">
+                            <i class="fas" :class="show ? 'fa-eye-slash' : 'fa-eye'"></i>
+                        </button>
+                    </div>
+                </div>
+
+                <button type="submit"
+                    class="w-full py-5 bg-teal-700 text-white rounded-2xl font-black text-xs uppercase tracking-[0.2em] shadow-xl shadow-teal-900/20 hover:bg-teal-800 transition-all duration-200">
+                    Secure Login
+                </button>
+            </form>
+
+            <div class="mt-8 pt-6 border-t border-slate-100 text-center">
+                <p class="text-slate-400 text-sm font-medium">
+                    New to MedLink?
+                    <a href="{{ url_for('register') }}" class="text-teal-700 font-bold hover:text-teal-800 ml-1">Join
+                        the
+                        Network</a>
+                </p>
+            </div>
+        </div>
+    </div>
+
+</body>
+
+</html>

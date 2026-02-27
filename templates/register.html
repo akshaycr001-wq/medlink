@@ -1,0 +1,247 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MedLink | Register</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script defer src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap"
+        rel="stylesheet">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <style>
+        body {
+            font-family: 'Plus Jakarta Sans', sans-serif;
+            background: #f8fafc;
+        }
+
+        [x-cloak] {
+            display: none !important;
+        }
+    </style>
+</head>
+
+<body class="min-h-screen flex items-center justify-center p-6 bg-slate-50">
+
+    <div class="w-full max-w-lg bg-white rounded-[2.5rem] shadow-xl p-8 md:p-12 border border-slate-100"
+        x-data="registrationForm()">
+
+        <!-- Flashed Messages -->
+        {% with messages = get_flashed_messages() %}
+        {% if messages %}
+        <div class="mb-6 p-4 rounded-xl bg-amber-50 text-amber-600 text-xs font-bold border border-amber-100">
+            {% for message in messages %}
+            <p>{{ message }}</p>
+            {% endfor %}
+        </div>
+        {% endif %}
+        {% endwith %}
+
+        <div class="text-center mb-8">
+            <h1 class="text-3xl font-black text-slate-900 mb-2">Join MedLink</h1>
+            <p class="text-slate-400 font-medium">Create your account to get started</p>
+        </div>
+
+        <div class="flex p-1 bg-slate-100 rounded-xl mb-6">
+            <button @click="role = 'patient'"
+                :class="role === 'patient' ? 'bg-white text-teal-700 shadow-sm' : 'text-slate-500'"
+                class="flex-1 py-3 rounded-lg font-bold text-sm transition-all">Patient</button>
+            <button @click="role = 'pharmacy'"
+                :class="role === 'pharmacy' ? 'bg-white text-teal-700 shadow-sm' : 'text-slate-500'"
+                class="flex-1 py-3 rounded-lg font-bold text-sm transition-all">Pharmacy</button>
+            <button @click="role = 'admin'"
+                :class="role === 'admin' ? 'bg-white text-teal-700 shadow-sm' : 'text-slate-500'"
+                class="flex-1 py-3 rounded-lg font-bold text-sm transition-all">Admin</button>
+        </div>
+
+        <form action="{{ url_for('register') }}" method="POST" enctype="multipart/form-data" class="space-y-4"
+            @submit.prevent="submitForm">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <input type="hidden" name="role" x-model="role">
+            <input type="hidden" name="latitude" x-model="lat">
+            <input type="hidden" name="longitude" x-model="lng">
+
+            <!-- Manual Gmail Option -->
+            <div class="mb-6 p-6 bg-slate-50 border border-slate-100 rounded-[2rem] relative overflow-hidden">
+                <div class="flex items-center gap-3 mb-4">
+                    <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" class="w-5 h-5"
+                        alt="Google">
+                    <span class="text-sm font-black text-slate-700">Gmail Option</span>
+                </div>
+                <div class="space-y-2">
+                    <label class="block text-[10px] font-black text-slate-400 uppercase tracking-widest">Enter Gmail
+                        Address</label>
+                    <input type="email" name="gmail" placeholder="yourname@gmail.com"
+                        class="w-full px-5 py-4 bg-white border border-slate-200 rounded-xl outline-none focus:border-teal-500 font-bold text-sm">
+                </div>
+                <div class="flex items-center gap-4 my-6">
+                    <div class="flex-1 h-px bg-slate-200"></div>
+                    <span class="text-[10px] font-black text-slate-400 uppercase tracking-widest">And set
+                        credentials</span>
+                    <div class="flex-1 h-px bg-slate-200"></div>
+                </div>
+            </div>
+
+            <div x-show="role === 'patient' || role === 'admin'">
+                <label class="block text-xs font-bold text-slate-500 uppercase mb-1">Full Name</label>
+                <input type="text" name="name" :required="role === 'patient' || role === 'admin'" placeholder="John Doe"
+                    class="w-full px-5 py-4 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:border-teal-500 font-bold">
+            </div>
+
+            <div>
+                <label class="block text-xs font-bold text-slate-500 uppercase mb-1">Username</label>
+                <input type="text" name="username" required placeholder="johndoe"
+                    class="w-full px-5 py-4 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:border-teal-500 font-bold">
+            </div>
+
+            <div class="relative">
+                <label class="block text-xs font-bold text-slate-500 uppercase mb-1">Password</label>
+                <input :type="showPassword ? 'text' : 'password'" name="password" required placeholder="••••••••"
+                    x-model="password"
+                    class="w-full px-5 py-4 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:border-teal-500 font-bold pr-12">
+                <button type="button" @click="showPassword = !showPassword"
+                    class="absolute right-4 top-[2.1rem] text-slate-400 hover:text-teal-600">
+                    <i class="fas" :class="showPassword ? 'fa-eye-slash' : 'fa-eye'"></i>
+                </button>
+                <p x-show="password.length > 0 && password.length < 8" class="text-red-500 text-xs mt-1 font-bold">Must
+                    be at least 8 characters</p>
+            </div>
+
+            <div>
+                <label class="block text-xs font-bold text-slate-500 uppercase mb-1">Phone Number</label>
+                <div class="relative">
+                    <input type="text" name="phone" required x-model="phone" placeholder="9876543210"
+                        @input="validatePhone" maxlength="10"
+                        class="w-full px-5 py-4 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:border-teal-500 font-bold">
+                    <div class="absolute right-4 top-4 text-slate-300">
+                        <i class="fas fa-phone text-xs"></i>
+                    </div>
+                </div>
+                <p x-show="phoneError" class="text-red-500 text-[10px] mt-1 font-bold" x-text="phoneError"></p>
+            </div>
+
+            <div x-show="role === 'pharmacy'" x-transition class="space-y-4 pt-4 border-t border-slate-100">
+                <div>
+                    <label class="block text-xs font-bold text-slate-500 uppercase mb-1">Shop Name</label>
+                    <input type="text" name="shop_name" :required="role === 'pharmacy'" placeholder="City Meds"
+                        class="w-full px-5 py-4 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:border-teal-500 font-bold">
+                </div>
+
+                <div>
+                    <label class="block text-xs font-bold text-slate-500 uppercase mb-1">Location Address</label>
+                    <div class="flex gap-2">
+                        <input type="text" name="location_address" :required="role === 'pharmacy'" x-model="address"
+                            placeholder="Main Street, City"
+                            class="w-full px-5 py-4 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:border-teal-500 font-bold">
+                        <button type="button" @click="getLocation()"
+                            class="px-4 py-4 bg-teal-50 text-teal-600 rounded-xl border border-teal-100 hover:bg-teal-100 transition-colors"
+                            :disabled="loadingLocation">
+                            <i class="fas"
+                                :class="loadingLocation ? 'fa-spinner fa-spin' : 'fa-location-crosshairs'"></i>
+                        </button>
+                    </div>
+                    <p x-show="locationStatus" class="text-xs font-bold mt-1 text-teal-600" x-text="locationStatus"></p>
+                </div>
+
+                <div>
+                    <label class="block text-xs font-bold text-slate-500 uppercase mb-1">Pharmacist Reg. No
+                        (PRC)</label>
+                    <input type="text" name="prc_no" :required="role === 'pharmacy'" placeholder="PRC-123456"
+                        class="w-full px-5 py-4 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:border-teal-500 font-bold">
+                </div>
+
+                <div>
+                    <label class="block text-xs font-bold text-slate-500 uppercase mb-1">Drug License (DL) No</label>
+                    <input type="text" name="dl_no" :required="role === 'pharmacy'" placeholder="DL-XXX-YYY"
+                        class="w-full px-5 py-4 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:border-teal-500 font-bold">
+                </div>
+
+                <div>
+                    <label class="block text-xs font-bold text-slate-500 uppercase mb-1">Upload License
+                        (Optional)</label>
+                    <input type="file" name="license_doc" accept=".pdf,.jpg,.jpeg,.png"
+                        class="w-full px-5 py-3 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:border-teal-500 font-bold text-xs file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-xs file:font-black file:bg-teal-50 file:text-teal-700 hover:file:bg-teal-100">
+                </div>
+            </div>
+
+            <button type="submit"
+                class="w-full py-4 bg-teal-600 text-white rounded-xl font-bold text-sm uppercase tracking-widest hover:bg-teal-700 transition-all shadow-lg shadow-teal-600/20 mt-6"
+                :disabled="!isValid()">Create Account</button>
+        </form>
+
+        <p class="text-center text-sm font-bold text-slate-400 mt-8">
+            Already have an account? <a href="{{ url_for('login') }}" class="text-teal-600 hover:underline">Login</a>
+        </p>
+    </div>
+
+    <script>
+        function registrationForm() {
+            return {
+                role: 'patient',
+                showPassword: false,
+                password: '',
+                phone: '',
+                phoneError: '',
+                lat: '',
+                lng: '',
+                address: '',
+                loadingLocation: false,
+                locationStatus: '',
+
+                validatePhone() {
+                    this.phone = this.phone.replace(/[^0-9]/g, '');
+                    if (this.role === 'pharmacy' && this.phone.length !== 10) {
+                        this.phoneError = 'Phone number must be exactly 10 digits';
+                    } else {
+                        this.phoneError = '';
+                    }
+                },
+
+                getLocation() {
+                    if (!navigator.geolocation) {
+                        this.locationStatus = "Geolocation is not supported by your browser";
+                        return;
+                    }
+
+                    this.loadingLocation = true;
+                    this.locationStatus = "Fetching location...";
+
+                    navigator.geolocation.getCurrentPosition(
+                        (position) => {
+                            this.lat = position.coords.latitude;
+                            this.lng = position.coords.longitude;
+                            this.loadingLocation = false;
+                            this.locationStatus = `Location captured: ${this.lat.toFixed(4)}, ${this.lng.toFixed(4)}`;
+                            // Optionally reverse geocode here if you had an API key
+                            if (!this.address) this.address = "Location Coordinates Captured";
+                        },
+                        (error) => {
+                            this.loadingLocation = false;
+                            this.locationStatus = "Unable to retrieve location. Please allow permissions.";
+                            console.error(error);
+                        }
+                    );
+                },
+
+                isValid() {
+                    if (this.password.length < 8) return false;
+                    if (this.role === 'pharmacy') {
+                        if (this.phone.length !== 10) return false;
+                    }
+                    return true;
+                },
+
+                submitForm(e) {
+                    if (this.isValid()) {
+                        e.target.submit();
+                    }
+                }
+            }
+        }
+    </script>
+
+</body>
+
+</html>

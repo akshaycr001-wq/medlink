@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MedLink | Medicine & Emergency Support</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body class="bg-slate-50 font-sans text-slate-900">
+    <nav class="p-6 max-w-7xl mx-auto flex justify-between items-center">
+        <a href="{{ url_for('homepage') }}" class="flex items-center gap-2">
+            <div class="w-10 h-10 bg-teal-700 rounded-xl flex items-center justify-center text-white"><i class="fas fa-plus-medical"></i></div>
+            <span class="text-2xl font-black text-slate-800 tracking-tight">MedLink</span>
+        </a>
+        <div class="flex gap-4 items-center">
+            <a href="{{ url_for('admin_login') }}" class="px-4 py-2 text-sm font-medium text-slate-500 hover:text-teal-700 transition-colors">Admin</a>
+            <a href="{{ url_for('login') }}" class="px-6 py-2 font-bold text-teal-700 hover:text-teal-900 transition-colors">Login</a>
+            <a href="{{ url_for('register') }}" class="px-6 py-2 bg-teal-700 text-white rounded-xl font-bold shadow-lg shadow-teal-700/20 hover:bg-teal-800 transition-all">Sign Up</a>
+        </div>
+    </nav>
+
+    {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+            <div class="max-w-7xl mx-auto px-6">
+                {% for category, msg in messages %}
+                    <div class="mb-4 p-4 rounded-xl {{ 'bg-green-100 text-green-800' if category == 'success' else 'bg-red-100 text-red-800' }}">
+                        {{ msg }}
+                    </div>
+                {% endfor %}
+            </div>
+        {% endif %}
+    {% endwith %}
+
+    <header class="max-w-7xl mx-auto px-6 py-20 text-center">
+        <h1 class="text-5xl md:text-7xl font-extrabold text-slate-900 mb-6 leading-tight">Find Essential Medicine <br><span class="text-teal-700">In Real-Time</span></h1>
+        <p class="text-lg text-slate-500 max-w-2xl mx-auto mb-10">Connecting patients with local pharmacies during critical shortages and emergencies. Locate stock instantly and save lives.</p>
+        <div class="flex flex-col md:flex-row gap-4 justify-center">
+            {% if current_user.is_authenticated and current_user.role == 'patient' %}
+                <a href="{{ url_for('patient_dashboard') }}" class="px-10 py-5 bg-teal-700 text-white rounded-2xl font-black text-lg shadow-xl hover:scale-105 transition-all text-center">START SEARCHING</a>
+            {% else %}
+                <a href="{{ url_for('login') }}?next=patient" class="px-10 py-5 bg-teal-700 text-white rounded-2xl font-black text-lg shadow-xl hover:scale-105 transition-all text-center">START SEARCHING</a>
+            {% endif %}
+            {% if current_user.is_authenticated and current_user.role == 'pharmacy_owner' %}
+                <a href="{{ url_for('pharmacy_dashboard') }}" class="px-10 py-5 bg-white border-2 border-slate-200 text-slate-600 rounded-2xl font-black text-lg hover:bg-slate-50 transition-all text-center">PHARMACY PARTNERSHIP</a>
+            {% else %}
+                <a href="{{ url_for('register', role='pharmacy') }}" class="px-10 py-5 bg-white border-2 border-slate-200 text-slate-600 rounded-2xl font-black text-lg hover:bg-slate-50 transition-all text-center">PHARMACY PARTNERSHIP</a>
+            {% endif %}
+            {% if current_user.is_authenticated and current_user.role == 'admin' %}
+                <a href="{{ url_for('admin_dashboard') }}" class="px-10 py-5 bg-slate-800 text-white rounded-2xl font-black text-lg shadow-xl hover:scale-105 transition-all text-center">ADMIN DASHBOARD</a>
+            {% endif %}
+        </div>
+    </header>
+
+    <section class="max-w-7xl mx-auto px-6 py-20 grid md:grid-cols-3 gap-10">
+        <div class="bg-white p-8 rounded-[2rem] shadow-sm border border-slate-100">
+            <div class="w-14 h-14 bg-blue-50 text-blue-600 rounded-2xl flex items-center justify-center text-2xl mb-6"><i class="fas fa-search-location"></i></div>
+            <h3 class="text-xl font-bold mb-3">Live Stock Tracker</h3>
+            <p class="text-slate-500 text-sm">Check real-time inventory levels of verified local pharmacies before you travel.</p>
+        </div>
+        <div class="bg-white p-8 rounded-[2rem] shadow-sm border border-slate-100">
+            <div class="w-14 h-14 bg-red-50 text-red-600 rounded-2xl flex items-center justify-center text-2xl mb-6"><i class="fas fa-broadcast-tower"></i></div>
+            <h3 class="text-xl font-bold mb-3">Emergency SOS</h3>
+            <p class="text-slate-500 text-sm">Broadcast urgent requests to all pharmacies in your area with a single tap.</p>
+        </div>
+        <div class="bg-white p-8 rounded-[2rem] shadow-sm border border-slate-100">
+            <div class="w-14 h-14 bg-teal-50 text-teal-600 rounded-2xl flex items-center justify-center text-2xl mb-6"><i class="fas fa-shield-heart"></i></div>
+            <h3 class="text-xl font-bold mb-3">Verified Network</h3>
+            <p class="text-slate-500 text-sm">All pharmacies on MedLink undergo rigorous license verification by our admins.</p>
+        </div>
+    </section>
+</body>
+</html>

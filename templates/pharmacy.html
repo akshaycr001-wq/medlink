@@ -1,0 +1,298 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MedLink | Pharmacy Terminal</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script defer src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;700;800&display=swap"
+        rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Plus Jakarta Sans', sans-serif;
+            background: #f8fafc;
+        }
+
+        .glass-card {
+            background: rgba(255, 255, 255, 0.9);
+            backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.5);
+        }
+
+        [x-cloak] {
+            display: none !important;
+        }
+
+        .sos-animate {
+            animation: pulse-red 2s infinite;
+        }
+
+        @keyframes pulse-red {
+            0% {
+                box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.4);
+            }
+
+            70% {
+                box-shadow: 0 0 0 15px rgba(239, 68, 68, 0);
+            }
+
+            100% {
+                box-shadow: 0 0 0 0 rgba(239, 68, 68, 0);
+            }}
+    </style>
+</head>
+
+<body x-data="pharmacyApp()" x-init="init()" class="min-h-screen">
+
+    <nav
+        class="sticky top-0 z-50 bg-white/80 backdrop-blur-md border-b border-slate-200 px-8 py-4 flex justify-between items-center shadow-sm">
+        <div class="flex items-center gap-3">
+            <div class="w-10 h-10 bg-teal-700 rounded-xl flex items-center justify-center text-white shadow-lg">
+                <i class="fas fa-prescription-bottle-medical"></i>
+            </div>
+            <div>
+                <span class="text-xl font-black text-slate-900 tracking-tighter uppercase">MedLink <span
+                        class="text-teal-600">Terminal</span></span>
+                <span class="block text-[10px] font-bold text-slate-400 uppercase tracking-widest">{{ pharmacy.shop_name
+                    }}</span>
+            </div>
+        </div>
+
+        <div class="flex items-center gap-4">
+            <button @click="simulateBroadcast()"
+                class="hidden md:flex items-center gap-2 px-4 py-2 bg-red-50 text-red-600 rounded-xl text-[10px] font-black uppercase hover:bg-red-100 transition-all border border-red-100">
+                <i class="fas fa-bullhorn"></i> Simulate User SOS
+            </button>
+
+            <div class="h-8 w-[1px] bg-slate-200 mx-2"></div>
+
+            <a href="{{ url_for('logout') }}"
+                class="flex items-center gap-2 px-5 py-2.5 bg-slate-900 text-white rounded-xl text-[11px] font-black uppercase tracking-widest hover:bg-red-600 transition-all duration-300 shadow-lg shadow-slate-900/20 group">
+                <i class="fas fa-power-off text-teal-400 group-hover:text-white transition-colors"></i>
+                <span>Logout</span>
+            </a>
+        </div>
+    </nav>
+
+    <main class="max-w-7xl mx-auto p-6 space-y-8">
+
+        <div class="grid grid-cols-1 lg:grid-cols-12 gap-8">
+            <!-- Sidebar -->
+            <div class="lg:col-span-4 space-y-6">
+                <!-- Stock Management -->
+                <div class="glass-card p-8 rounded-[2.5rem] shadow-xl border-none">
+                    <h3
+                        class="text-[11px] font-black text-slate-400 uppercase tracking-widest mb-6 flex items-center gap-2">
+                        <i class="fas fa-edit text-teal-600"></i> Stock Management
+                    </h3>
+                    <div class="space-y-4">
+                        <input x-model="form.name" type="text" placeholder="Medicine Brand Name (e.g. Dolo 650)"
+                            class="w-full px-5 py-4 bg-slate-50 border border-slate-100 rounded-2xl outline-none focus:border-teal-500 text-sm font-bold">
+
+                        <input x-model="form.manufacturer" type="text" placeholder="Manufacturer / Brand"
+                            class="w-full px-5 py-4 bg-slate-50 border border-slate-100 rounded-2xl outline-none focus:border-teal-500 text-sm font-bold">
+
+                        <!-- ADDED DESCRIPTION FIELD HERE -->
+                        <textarea x-model="form.description" placeholder="Medicine Description / Dosage Info"
+                            class="w-full px-5 py-4 bg-slate-50 border border-slate-100 rounded-2xl outline-none focus:border-teal-500 text-sm font-bold resize-none h-24"
+                            rows="3"></textarea>
+
+                        <div class="grid grid-cols-3 gap-3">
+                            <input x-model="form.qty" type="number" placeholder="Qty"
+                                class="px-5 py-4 bg-slate-50 border border-slate-100 rounded-2xl outline-none focus:border-teal-500 text-sm font-bold">
+                            <input x-model="form.price" type="number" step="0.01" placeholder="Price"
+                                class="px-5 py-4 bg-slate-50 border border-slate-100 rounded-2xl outline-none focus:border-teal-500 text-sm font-bold">
+                            <input x-model="form.expiry" type="date"
+                                class="px-5 py-4 bg-slate-50 border border-slate-100 rounded-2xl outline-none focus:border-teal-500 text-sm font-bold">
+                        </div>
+                        <button @click="addStock()"
+                            class="w-full py-4 bg-teal-700 text-white rounded-2xl text-[10px] font-black uppercase tracking-widest hover:bg-teal-800 transition-all">Update
+                            Inventory</button>
+                    </div>
+                </div>
+
+                <!-- Admin Alerts -->
+                <div class="bg-white p-8 rounded-[2.5rem] border border-slate-100 shadow-xl shadow-slate-200/50">
+                    <h3 class="text-xl font-black text-slate-900 mb-6 flex items-center gap-2">
+                        <i class="fas fa-bell text-teal-500"></i> Admin Alerts
+                    </h3>
+                    <div class="space-y-4 max-h-[400px] overflow-y-auto pr-2">
+                        <template x-for="alert in alerts" :key="alert.id">
+                            <div :class="{
+                                'bg-blue-50 border-blue-100 text-blue-700': alert.type === 'info',
+                                'bg-amber-50 border-amber-100 text-amber-700': alert.type === 'warning',
+                                'bg-red-50 border-red-100 text-red-700': alert.type === 'danger'
+                            }"
+                                class="p-5 rounded-2xl border transition-all animate-in slide-in-from-right duration-300">
+                                <div class="flex justify-between items-start mb-2">
+                                    <span class="text-[10px] font-black uppercase tracking-widest opacity-60"
+                                        x-text="alert.type"></span>
+                                    <span class="text-[10px] font-bold opacity-40" x-text="alert.time"></span>
+                                </div>
+                                <p class="text-sm font-bold leading-relaxed" x-text="alert.msg"></p>
+                            </div>
+                        </template>
+                        <template x-if="alerts.length === 0">
+                            <div class="text-center py-10 opacity-20">
+                                <i class="fas fa-check-circle text-4xl mb-2"></i>
+                                <p class="text-xs font-bold">No new alerts</p>
+                            </div>
+                        </template>
+                    </div>
+                </div>
+
+                <!-- Customer Feedback -->
+                <div class="glass-card p-8 rounded-[2.5rem] shadow-xl border-none">
+                    <h3
+                        class="text-[11px] font-black text-slate-400 uppercase tracking-widest mb-6 flex items-center gap-2">
+                        <i class="fas fa-star text-yellow-400"></i> Customer Feedback
+                    </h3>
+                    <div class="space-y-4 max-h-[300px] overflow-y-auto pr-2">
+                        {% for review in reviews %}
+                        <div class="p-5 bg-white rounded-2xl border border-slate-50 transition-all hover:shadow-sm">
+                            <div class="flex justify-between items-start mb-2">
+                                <span class="text-xs font-bold text-slate-900">{{ review.user_name }}</span>
+                                <div class="flex gap-0.5">
+                                    {% for i in range(review.rating) %}
+                                    <i class="fas fa-star text-[10px] text-yellow-500"></i>
+                                    {% endfor %}
+                                    {% for i in range(5 - review.rating) %}
+                                    <i class="far fa-star text-[10px] text-slate-200"></i>
+                                    {% endfor %}
+                                </div>
+                            </div>
+                            <p class="text-xs text-slate-500 font-medium italic leading-relaxed">"{{ review.comment }}"
+                            </p>
+                            <p class="text-[10px] text-slate-300 font-bold mt-2 text-right">{{
+                                review.created_at.strftime('%b %d') }}</p>
+                        </div>
+                        {% else %}
+                        <div class="text-center py-8 opacity-40">
+                            <i class="far fa-comment-dots text-3xl mb-2 text-slate-300"></i>
+                            <p class="text-xs font-bold text-slate-400">No reviews yet</p>
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+
+            <!-- Main Panel -->
+            <div class="lg:col-span-8 space-y-8">
+                <!-- SOS Broadcasts -->
+                <div
+                    class="glass-card p-8 rounded-[3rem] border-red-100 border-2 shadow-2xl shadow-red-500/10 sos-animate">
+                    <div class="flex justify-between items-center mb-6">
+                        <h2 class="text-xl font-black text-slate-900 flex items-center gap-3">
+                            <i class="fas fa-tower-broadcast text-red-500 animate-pulse"></i>
+                            Emergency Broadcasts <span class="text-xs font-bold text-red-400">(Live Updates)</span>
+                        </h2>
+                    </div>
+
+                    <div class="space-y-4">
+                        <template x-for="sos in emergencies" :key="sos.id">
+                            <div
+                                class="p-6 bg-white rounded-3xl border border-red-50 hover:border-red-200 transition-all flex flex-col md:flex-row justify-between items-center gap-4">
+                                <div>
+                                    <h4 class="font-bold text-slate-900 text-lg" x-text="sos.med"></h4>
+                                    <p class="text-[10px] font-black text-slate-400 uppercase tracking-widest mt-1"
+                                        x-text="sos.patient_name + ' • ' + (sos.time || 'Now')"></p>
+                                </div>
+                                <a :href="'https://wa.me/' + sos.phone + '?text=Responding to your MedLink SOS for ' + sos.med"
+                                    target="_blank"
+                                    class="flex items-center gap-2 px-6 py-3 bg-green-500 text-white rounded-2xl text-[10px] font-black uppercase tracking-widest hover:bg-green-600 shadow-lg shadow-green-500/20 transition-all">
+                                    <i class="fab fa-whatsapp text-lg"></i> Respond via WhatsApp
+                                </a>
+                            </div>
+                        </template>
+                    </div>
+                </div>
+
+                <!-- Stock List -->
+                <div class="glass-card p-10 rounded-[3rem] shadow-sm">
+                    <div class="flex justify-between items-center mb-8">
+                        <h2 class="text-xl font-black text-slate-900">Current Stock List</h2>
+                        <span class="flex items-center gap-2 text-[10px] font-black text-red-500 uppercase">
+                            <i class="fas fa-exclamation-triangle"></i> Expiry Alerts
+                        </span>
+                    </div>
+
+                    <div class="grid grid-cols-2 md:grid-cols-3 gap-5">
+                        <template x-for="item in inventory" :key="item.id">
+                            <div class="group relative p-6 rounded-[2rem] border transition-all"
+                                :class="isExpiring(item.expiry) ? 'bg-red-50 border-red-100' : 'bg-white border-slate-100 hover:shadow-md'">
+
+                                <button @click="removeStock(item.id)"
+                                    class="absolute top-4 right-4 text-slate-300 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-all">
+                                    <i class="fas fa-trash-alt text-xs"></i>
+                                </button>
+
+                                <h4 class="font-bold text-slate-900" x-text="item.name"></h4>
+                                <div class="mt-2 text-xs text-slate-500" x-text="item.description || 'No description'">
+                                </div>
+                                <div class="mt-2">
+                                    <p class="text-[10px] font-black text-slate-400 uppercase tracking-tighter"
+                                        x-text="'Qty: ' + item.qty + ' | Price: ₹' + (item.price || 'N/A')"></p>
+                                    <p class="text-[10px] font-black mt-1 uppercase"
+                                        :class="isExpiring(item.expiry) ? 'text-red-600' : 'text-teal-600'"
+                                        x-text="'EXP: ' + item.expiry"></p>
+                                </div>
+                            </div>
+                        </template>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </main>
+
+        
+    <script>
+        function pharmacyApp() {
+            return {
+                form: { name: '', manufacturer: '', description: '', qty: '', price: '', expiry: '' },
+                
+                // DATA INJECTION
+                inventory: {{ inventory_json | safe }},
+                alerts: {{ alerts_json | safe }},
+                emergencies: {{ emergencies_json | safe }},
+
+                init() {
+                    console.log('Pharmacy Terminal Online');
+                },
+
+                simulateBroadcast() {
+                    alert("Emergency Broadcast system active. Monitoring SOS requests...");
+                },
+
+                async addStock() {
+                    const res = await fetch('/pharmacy/add_stock', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(this.form)
+                    });
+                    if (res.ok) location.reload();
+                    else alert("Failed to add stock");
+                },
+
+                async removeStock(id) {
+                    if (confirm('Delete this item?')) {
+                        const res = await fetch(`/pharmacy/remove_stock/${id}`, { method: 'POST' });
+                        if (res.ok) location.reload();
+                    }
+                },
+
+                isExpiring(date) {
+                    const d = new Date(date);
+                    const today = new Date();
+                    const diff = (d - today) / (1000 * 60 * 60 * 24);
+                    return diff < 30;
+                }
+            }
+        }
+    </script>
+
+</body>
+
+</html>

@@ -1,0 +1,1009 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MedLink | Control Center</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script defer src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap"
+        rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Plus Jakarta Sans', sans-serif;
+            background: #F8FAFC;
+            color: #1e293b;
+        }
+
+        .glass {
+            background: rgba(255, 255, 255, 0.8);
+            backdrop-filter: blur(12px);
+            border: 1px solid rgba(0, 0, 0, 0.05);
+        }
+
+        .sidebar-item {
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            color: #64748b;
+        }
+
+        .sidebar-item.active {
+            background: #0ea5e9;
+            color: white;
+            box-shadow: 0 10px 15px -3px rgba(14, 165, 233, 0.2);
+        }
+
+        .sidebar-item:hover:not(.active) {
+            background: #f1f5f9;
+            color: #0ea5e9;
+        }
+
+        [x-cloak] {
+            display: none !important;
+        }
+
+        .custom-scrollbar::-webkit-scrollbar {
+            width: 4px;
+        }
+
+        .custom-scrollbar::-webkit-scrollbar-track {
+            background: transparent;
+        }
+
+        .custom-scrollbar::-webkit-scrollbar-thumb {
+            background: #e2e8f0;
+            border-radius: 10px;
+        }
+    </style>
+</head>
+
+<body x-data="adminSystem()" x-init="init()" class="min-h-screen flex overflow-hidden">
+
+    <!-- Sidebar -->
+    <aside class="w-80 glass border-r bg-white flex flex-col z-50">
+        <div class="p-8">
+            <div class="flex items-center gap-3 mb-12">
+                <div
+                    class="w-12 h-12 bg-sky-500 rounded-2xl flex items-center justify-center shadow-lg shadow-sky-500/20">
+                    <i class="fas fa-shield-halved text-2xl text-white"></i>
+                </div>
+                <div>
+                    <h1 class="font-black text-xl tracking-tighter uppercase leading-none text-slate-900">MedLink</h1>
+                    <span class="text-[10px] font-bold text-sky-600 uppercase tracking-[0.2em]">Oversight Hub</span>
+                </div>
+            </div>
+
+            <nav class="space-y-1">
+                <template x-for="tab in tabs" :key="tab.id">
+                    <button @click="currentTab = tab.id"
+                        :class="currentTab === tab.id ? 'active' : 'text-slate-500 hover:text-sky-600 hover:bg-slate-50'"
+                        class="sidebar-item w-full flex items-center gap-4 px-6 py-4 rounded-2xl font-black text-xs uppercase tracking-widest">
+                        <i :class="tab.icon" class="text-lg w-6"></i>
+                        <span x-text="tab.name"></span>
+                    </button>
+                </template>
+            </nav>
+        </div>
+
+        <div class="mt-auto p-8 pt-0">
+            <div class="bg-slate-50 rounded-3xl p-6 border border-slate-200">
+                <div class="flex items-center gap-3 mb-4">
+                    <div class="w-10 h-10 rounded-full bg-white border border-slate-200 flex items-center justify-center font-bold text-sky-500 shadow-sm"
+                        x-text="adminName[0]"></div>
+                    <div>
+                        <p class="text-xs font-black truncate text-slate-900" x-text="adminName"></p>
+                        <p class="text-[9px] font-bold text-slate-400 uppercase" x-text="adminRole"></p>
+                    </div>
+                </div>
+                <a href="/logout"
+                    class="block w-full py-3 bg-white border border-slate-200 text-slate-600 rounded-xl text-center text-[10px] font-black uppercase tracking-widest hover:text-red-500 hover:border-red-200 hover:bg-red-50 transition-all">
+                    Sign Out
+                </a>
+            </div>
+        </div>
+    </aside>
+
+    <!-- Main Content -->
+    <main class="flex-1 overflow-y-auto custom-scrollbar relative bg-[#F8FAFC]">
+
+        <!-- Header / Stats Bar -->
+        <header
+            class="sticky top-0 z-40 bg-white/80 backdrop-blur-md border-b border-slate-200 px-12 py-6 flex justify-between items-center shadow-sm">
+            <h2 class="text-3xl font-black tracking-tight text-slate-900"
+                x-text="tabs.find(t => t.id === currentTab).name"></h2>
+
+            <div class="flex items-center gap-6">
+                <div class="flex items-center gap-8 pr-8 border-r border-slate-200">
+                    <div class="text-right">
+                        <p class="text-[10px] font-bold text-slate-400 uppercase">System Status</p>
+                        <div class="flex items-center gap-2 justify-end">
+                            <span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+                            <span class="text-xs font-black text-emerald-600">OPERATIONAL</span>
+                        </div>
+                    </div>
+                </div>
+                <div class="relative">
+                    <button
+                        class="w-12 h-12 rounded-xl bg-white border border-slate-200 flex items-center justify-center text-slate-400 hover:text-sky-500 hover:border-sky-200 transition-all shadow-sm">
+                        <i class="fas fa-bell"></i>
+                        <span x-show="pendingCount > 0"
+                            class="absolute -top-1 -right-1 w-5 h-5 bg-red-500 text-white rounded-full text-[10px] flex items-center justify-center font-black animate-bounce shadow-lg shadow-red-200"
+                            x-text="pendingCount"></span>
+                    </button>
+                </div>
+            </div>
+        </header>
+
+        <!-- Dynamic Content -->
+        <div class="p-12">
+
+            <!-- OVERVIEW TAB -->
+            <div x-show="currentTab === 'overview'"
+                class="space-y-12 animate-in fade-in slide-in-from-bottom-4 duration-500">
+                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                    <div
+                        class="bg-white p-8 rounded-[2.5rem] border-l-4 border-l-sky-500 shadow-sm border border-slate-100">
+                        <p class="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Total Partners
+                        </p>
+                        <h3 class="text-4xl font-black text-slate-900" x-text="stats.pharmacies"></h3>
+                        <p class="text-[10px] text-sky-600 font-bold mt-2 uppercase">Pharmacies Active</p>
+                    </div>
+                    <div
+                        class="bg-white p-8 rounded-[2.5rem] border-l-4 border-l-emerald-500 shadow-sm border border-slate-100">
+                        <p class="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Emergency Hubs
+                        </p>
+                        <h3 class="text-4xl font-black text-slate-900" x-text="stats.hospitals"></h3>
+                        <p class="text-[10px] text-emerald-600 font-bold mt-2 uppercase">Hospitals Integrated</p>
+                    </div>
+                    <div
+                        class="bg-white p-8 rounded-[2.5rem] border-l-4 border-l-amber-500 shadow-sm border border-slate-100">
+                        <p class="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Inventory Items
+                        </p>
+                        <h3 class="text-4xl font-black text-slate-900" x-text="stats.medicines"></h3>
+                        <p class="text-[10px] text-amber-600 font-bold mt-2 uppercase">Medicines Tracked</p>
+                    </div>
+                    <div
+                        class="bg-white p-8 rounded-[2.5rem] border-l-4 border-l-red-500 shadow-sm border border-slate-100">
+                        <p class="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Fleet Size</p>
+                        <h3 class="text-4xl font-black text-slate-900" x-text="stats.ambulances"></h3>
+                        <p class="text-[10px] text-red-600 font-bold mt-2 uppercase">Rescue Vehicles</p>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                    <div class="lg:col-span-2 bg-white p-10 rounded-[3rem] shadow-sm border border-slate-100">
+                        <div class="flex justify-between items-center mb-10">
+                            <div>
+                                <h4 class="text-xl font-black uppercase tracking-tight text-slate-900">Recent SOS
+                                    Activity</h4>
+                                <p class="text-xs text-slate-400 mt-1 font-bold">Monitor emergency requests in
+                                    real-time.</p>
+                            </div>
+                            <button @click="currentTab = 'sos'"
+                                class="text-[10px] font-black text-sky-600 hover:text-sky-700 uppercase tracking-widest underline decoration-2 underline-offset-4">View
+                                All Tracking</button>
+                        </div>
+                        <div class="space-y-4">
+                            <template x-for="s in recentSOS" :key="s.id">
+                                <div
+                                    class="p-5 bg-slate-50 rounded-2xl border border-slate-200 flex justify-between items-center hover:bg-white hover:shadow-md transition-all group">
+                                    <div class="flex items-center gap-4">
+                                        <div :class="s.status === 'open' ? 'bg-red-100 text-red-600' : 'bg-emerald-100 text-emerald-600'"
+                                            class="w-12 h-12 rounded-xl flex items-center justify-center transition-colors">
+                                            <i class="fas fa-heart-pulse text-xl"></i>
+                                        </div>
+                                        <div>
+                                            <p class="font-black text-sm text-slate-900" x-text="s.medicine_name"></p>
+                                            <p class="text-[10px] text-slate-400 uppercase font-black tracking-widest mt-1"
+                                                x-text="s.patient_name + ' • ' + s.time"></p>
+                                        </div>
+                                    </div>
+                                    <span
+                                        :class="s.status === 'open' ? 'bg-red-500 text-white shadow-lg shadow-red-200' : 'bg-slate-200 text-slate-600'"
+                                        class="px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest"
+                                        x-text="s.status"></span>
+                                </div>
+                            </template>
+                        </div>
+                    </div>
+
+                    <div class="space-y-8">
+                        <div class="bg-sky-50 p-10 rounded-[3rem] border border-sky-100 relative overflow-hidden group">
+                            <div
+                                class="absolute -right-8 -top-8 w-32 h-32 bg-sky-500/5 rounded-full blur-2xl group-hover:bg-sky-500/10 transition-all">
+                            </div>
+                            <i class="fas fa-triangle-exclamation text-3xl text-sky-600 mb-4"></i>
+                            <h4 class="text-lg font-black leading-tight mb-2 text-slate-900">Expiry Audit Required</h4>
+                            <p class="text-xs text-slate-500 font-bold mb-6">Identified <span class="text-sky-600"
+                                    x-text="expiringCount"></span> batches nearing critical threshold.</p>
+                            <button @click="currentTab = 'alerts'"
+                                class="w-full py-4 bg-sky-500 text-white rounded-2xl text-[10px] font-black uppercase tracking-widest shadow-lg shadow-sky-500/20 hover:bg-sky-600 active:scale-95 transition-all">Run
+                                Notification Scan</button>
+                        </div>
+
+                        <div class="bg-white p-10 rounded-[3rem] shadow-sm border border-slate-100">
+                            <h4 class="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-6">Quick
+                                Actions</h4>
+                            <div class="space-y-3">
+                                <button @click="showAddAdminModal = true"
+                                    class="w-full p-4 bg-slate-50 hover:bg-white hover:shadow-md border border-slate-100 rounded-2xl flex items-center gap-4 text-[10px] font-black uppercase tracking-widest text-slate-600 hover:text-sky-600 transition-all">
+                                    <div
+                                        class="w-8 h-8 rounded-lg bg-sky-100 text-sky-600 flex items-center justify-center">
+                                        <i class="fas fa-user-plus"></i>
+                                    </div>
+                                    Register Sub-Admin
+                                </button>
+                                <button @click="showAddHospModal = true"
+                                    class="w-full p-4 bg-slate-50 hover:bg-white hover:shadow-md border border-slate-100 rounded-2xl flex items-center gap-4 text-[10px] font-black uppercase tracking-widest text-slate-600 hover:text-emerald-600 transition-all">
+                                    <div
+                                        class="w-8 h-8 rounded-lg bg-emerald-100 text-emerald-600 flex items-center justify-center">
+                                        <i class="fas fa-hospital-plus"></i>
+                                    </div>
+                                    Integrate Hospital
+                                </button>
+                                <button @click="showAddAmbModal = true"
+                                    class="w-full p-4 bg-slate-50 hover:bg-white hover:shadow-md border border-slate-100 rounded-2xl flex items-center gap-4 text-[10px] font-black uppercase tracking-widest text-slate-600 hover:text-red-600 transition-all">
+                                    <div
+                                        class="w-8 h-8 rounded-lg bg-red-100 text-red-600 flex items-center justify-center">
+                                        <i class="fas fa-truck-medical"></i>
+                                    </div>
+                                    Deploy Ambulance
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- MEDICINES TAB -->
+            <div x-show="currentTab === 'medicines'"
+                class="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
+                <div class="flex justify-between items-center mb-8">
+                    <div>
+                        <p class="text-[10px] text-slate-400 font-black uppercase tracking-widest mb-1">Inventory
+                            Oversight
+                        </p>
+                        <h4 class="text-2xl font-black text-slate-900">Medicine Master List</h4>
+                    </div>
+                </div>
+
+                <div class="bg-white rounded-[3rem] overflow-hidden shadow-sm border border-slate-100">
+                    <table class="w-full text-left">
+                        <thead class="bg-slate-50">
+                            <tr>
+                                <th class="px-10 py-6 text-[10px] font-black text-slate-400 uppercase tracking-widest">
+                                    Medicine Details</th>
+                                <th class="px-10 py-6 text-[10px] font-black text-slate-400 uppercase tracking-widest">
+                                    Pharmacy Partner</th>
+                                <th class="px-10 py-6 text-[10px] font-black text-slate-400 uppercase tracking-widest">
+                                    Stock Status</th>
+                                <th
+                                    class="px-10 py-6 text-[10px] font-black text-slate-400 uppercase tracking-widest text-right">
+                                    Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-slate-100">
+                            <template x-for="m in medicines" :key="m.id">
+                                <tr class="hover:bg-slate-50 transition-colors">
+                                    <td class="px-10 py-8">
+                                        <div>
+                                            <p class="font-black text-lg text-slate-900" x-text="m.name"></p>
+                                            <p class="text-[10px] text-slate-400 font-bold uppercase tracking-widest mt-1"
+                                                x-text="m.generic_name || 'Generic info missing'"></p>
+                                        </div>
+                                    </td>
+                                    <td class="px-10 py-8">
+                                        <p class="text-xs font-black text-sky-600 uppercase tracking-widest"
+                                            x-text="m.pharmacy_name"></p>
+                                    </td>
+                                    <td class="px-10 py-8">
+                                        <div class="flex items-center gap-2">
+                                            <div :class="m.qty > 0 ? 'bg-emerald-500' : 'bg-red-500'"
+                                                class="w-2 h-2 rounded-full"></div>
+                                            <p class="text-sm font-bold text-slate-700" x-text="'Qty: ' + m.qty"></p>
+                                        </div>
+                                    </td>
+                                    <td class="px-10 py-8 text-right">
+                                        <button @click="deleteMedicine(m.id)"
+                                            class="w-10 h-10 bg-white border border-slate-200 rounded-xl flex items-center justify-center text-red-500 hover:bg-red-500 hover:text-white transition-all shadow-sm">
+                                            <i class="fas fa-trash-can text-sm"></i>
+                                        </button>
+                                    </td>
+                                </tr>
+                            </template>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- AMBULANCE TAB -->
+            <div x-show="currentTab === 'ambulances'"
+                class="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
+                <div class="flex justify-between items-center mb-8">
+                    <div>
+                        <p class="text-[10px] text-slate-400 font-black uppercase tracking-widest mb-1">Fleet Management
+                        </p>
+                        <h4 class="text-2xl font-black text-slate-900">Ambulance Assets</h4>
+                    </div>
+                    <button @click="showAddAmbModal = true"
+                        class="px-8 py-4 bg-red-500 text-white rounded-2xl text-[10px] font-black uppercase tracking-widest hover:bg-red-600 shadow-lg shadow-red-500/20 transition-all flex items-center gap-2">
+                        <i class="fas fa-plus"></i>
+                        Deploy New Ambulance
+                    </button>
+                </div>
+
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
+                    <template x-for="a in ambulances" :key="a.id">
+                        <div
+                            class="bg-white p-10 rounded-[3rem] border border-slate-100 shadow-sm relative overflow-hidden group">
+                            <div
+                                class="absolute top-0 right-0 w-32 h-32 bg-red-500/5 rounded-bl-full flex items-center justify-center -mr-12 -mt-12 transition-all group-hover:scale-110">
+                                <i
+                                    class="fas fa-truck-medical text-3xl text-red-500/10 translate-x-4 -translate-y-4"></i>
+                            </div>
+
+                            <div class="flex justify-between items-start mb-10">
+                                <div
+                                    class="w-14 h-14 rounded-2xl bg-red-50 text-red-500 flex items-center justify-center text-2xl shadow-inner border border-red-100">
+                                    <i class="fas fa-ambulance"></i>
+                                </div>
+                                <div class="text-right">
+                                    <p class="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">
+                                        Vehicle Plate</p>
+                                    <p class="font-black text-lg text-slate-900" x-text="a.ambulance_no"></p>
+                                </div>
+                            </div>
+
+                            <div class="space-y-6 mb-10">
+                                <div class="flex justify-between items-center">
+                                    <span class="text-[9px] font-black text-slate-400 uppercase tracking-widest">Lead
+                                        Specialist</span>
+                                    <span
+                                        class="text-sm font-black text-slate-700 px-4 py-1.5 bg-slate-50 rounded-xl border border-slate-100"
+                                        x-text="a.driver_name"></span>
+                                </div>
+                                <div class="flex justify-between items-center">
+                                    <span
+                                        class="text-[9px] font-black text-slate-400 uppercase tracking-widest">Stationed
+                                        At</span>
+                                    <span class="text-xs font-bold text-sky-600"
+                                        x-text="a.hospital_name || 'Stand-by Fleet'"></span>
+                                </div>
+                            </div>
+
+                            <div class="flex gap-4">
+                                <a :href="'tel:' + a.driver_no"
+                                    class="flex-1 py-4 bg-slate-900 text-white rounded-2xl text-[10px] font-black uppercase tracking-widest hover:bg-slate-800 flex items-center justify-center gap-3 transition-all">
+                                    <i class="fas fa-phone"></i> Direct Link
+                                </a>
+                                <button @click="deleteAmbulance(a.id)"
+                                    class="w-16 h-16 bg-white border border-slate-200 rounded-2xl flex items-center justify-center text-red-500 hover:bg-red-500 hover:text-white transition-all shadow-md">
+                                    <i class="fas fa-trash-can"></i>
+                                </button>
+                            </div>
+                        </div>
+                    </template>
+                </div>
+            </div>
+
+            <!-- PHARMACY TAB -->
+            <div x-show="currentTab === 'pharmacies'"
+                class="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
+                <div class="flex justify-between items-center mb-8">
+                    <div>
+                        <p class="text-[10px] text-slate-400 font-black uppercase tracking-widest mb-1">Business
+                            Verification
+                        </p>
+                        <h4 class="text-2xl font-black text-slate-900">Pharmacy Partner Network</h4>
+                    </div>
+                    <div class="relative w-80">
+                        <i class="fas fa-search absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 text-xs"></i>
+                        <input type="text" x-model="search" placeholder="Search by name or license..."
+                            class="w-full pl-12 pr-6 py-4 bg-white border border-slate-200 rounded-2xl text-xs font-bold focus:outline-none focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500 transition-all text-slate-900 shadow-sm">
+                    </div>
+                </div>
+
+                <div class="bg-white rounded-[3rem] overflow-hidden shadow-sm border border-slate-100">
+                    <table class="w-full text-left">
+                        <thead class="bg-slate-50">
+                            <tr>
+                                <th class="px-10 py-6 text-[10px] font-black text-slate-400 uppercase tracking-widest">
+                                    Organization</th>
+                                <th class="px-10 py-6 text-[10px] font-black text-slate-400 uppercase tracking-widest">
+                                    License Verification</th>
+                                <th
+                                    class="px-10 py-6 text-[10px] font-black text-slate-400 uppercase tracking-widest text-right">
+                                    Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-slate-100">
+                            <template x-for="p in filteredPharmacies" :key="p.id">
+                                <tr class="hover:bg-slate-50 transition-colors">
+                                    <td class="px-10 py-8">
+                                        <div class="flex items-center gap-5">
+                                            <div class="w-14 h-14 rounded-2xl bg-sky-50 border border-sky-100 flex items-center justify-center font-black text-xl text-sky-600 shadow-sm"
+                                                x-text="p.shop_name[0]"></div>
+                                            <div>
+                                                <p class="font-black text-lg text-slate-900" x-text="p.shop_name"></p>
+                                                <div class="flex flex-col gap-1 mt-1">
+                                                    <p class="text-[10px] text-slate-400 font-bold uppercase tracking-widest"
+                                                        x-text="p.phone"></p>
+                                                    <p class="text-[10px] text-sky-600 font-bold" x-text="p.email">
+                                                    </p>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </td>
+                                    <td class="px-10 py-8">
+                                        <div class="space-y-2">
+                                            <div class="flex items-center gap-3">
+                                                <span
+                                                    class="text-[9px] font-black text-slate-400 uppercase w-12 text-right">DL:</span>
+                                                <span class="text-xs font-black font-mono text-slate-700"
+                                                    x-text="p.dl_no || 'NOT PROVIDED'"></span>
+                                            </div>
+                                            <div class="flex items-center gap-3">
+                                                <span
+                                                    class="text-[9px] font-black text-slate-400 uppercase w-12 text-right">PRC:</span>
+                                                <span class="text-xs font-black font-mono text-slate-700"
+                                                    x-text="p.prc_no || 'NOT PROVIDED'"></span>
+                                            </div>
+                                            <template x-if="p.license_doc">
+                                                <a :href="'/admin/view_license/' + p.id" target="_blank"
+                                                    class="flex items-center gap-2 text-[10px] font-black text-sky-600 hover:text-sky-700 mt-4 transition-all uppercase tracking-widest underline decoration-2 underline-offset-4">
+                                                    <i class="fas fa-file-shield text-sm"></i> Verify Legal Document
+                                                </a>
+                                            </template>
+                                        </div>
+                                    </td>
+                                    <td class="px-10 py-8 text-right">
+                                        <div class="flex justify-end gap-3">
+                                            <template x-if="!p.verified">
+                                                <button @click="verifyPharma(p.id)"
+                                                    class="px-6 py-3 bg-emerald-500 text-white rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-emerald-600 shadow-lg shadow-emerald-500/20 transition-all">Approve
+                                                    Business</button>
+                                            </template>
+                                            <template x-if="p.verified">
+                                                <span
+                                                    class="px-6 py-3 bg-slate-100 text-slate-500 rounded-xl text-[10px] font-black uppercase tracking-widest border border-slate-200">Verified
+                                                    Partner</span>
+                                            </template>
+                                            <button @click="openAlertModal(p)"
+                                                class="w-12 h-12 bg-white border border-slate-200 rounded-xl flex items-center justify-center text-sky-600 hover:bg-sky-50 transition-all shadow-sm">
+                                                <i class="fas fa-bell"></i>
+                                            </button>
+                                            <button @click="deletePharma(p.id)"
+                                                class="w-12 h-12 bg-white border border-slate-200 rounded-xl flex items-center justify-center text-red-500 hover:bg-red-50 transition-all shadow-sm">
+                                                <i class="fas fa-trash-can"></i>
+                                            </button>
+                                        </div>
+                                    </td>
+                                </tr>
+                            </template>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- SOS TAB -->
+            <div x-show="currentTab === 'sos'"
+                class="space-y-12 animate-in fade-in slide-in-from-bottom-4 duration-500">
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                    <template x-for="s in filteredSOS" :key="s.id">
+                        <div
+                            class="bg-white p-10 rounded-[3rem] border border-slate-100 shadow-sm hover:shadow-lg transition-all group">
+                            <div class="flex justify-between items-start mb-8">
+                                <div class="flex items-center gap-5">
+                                    <div :class="s.status === 'open' ? 'text-red-500 bg-red-50' : 'text-emerald-500 bg-emerald-50'"
+                                        class="w-16 h-16 rounded-2xl flex items-center justify-center text-2xl shadow-inner border border-red-50/50">
+                                        <i class="fas fa-tower-broadcast"></i>
+                                    </div>
+                                    <div>
+                                        <h4 class="text-xl font-black text-slate-900" x-text="s.medicine_name"></h4>
+                                        <p class="text-[10px] font-black text-slate-400 uppercase tracking-widest mt-1"
+                                            x-text="s.patient_name + ' • ' + s.time"></p>
+                                    </div>
+                                </div>
+                                <span
+                                    :class="s.status === 'open' ? 'bg-red-500 text-white shadow-lg shadow-red-200' : 'bg-slate-100 text-slate-500'"
+                                    class="px-5 py-2 rounded-full text-[10px] font-black uppercase tracking-widest"
+                                    x-text="s.status"></span>
+                            </div>
+
+                            <div class="grid grid-cols-2 gap-8 py-8 border-y border-slate-100">
+                                <div>
+                                    <span
+                                        class="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-2 block">Patient
+                                        Contact</span>
+                                    <p class="font-black text-sm text-slate-700" x-text="s.phone"></p>
+                                </div>
+                                <div>
+                                    <span
+                                        class="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-2 block">Alert
+                                        Duration</span>
+                                    <p class="font-black text-sm text-slate-700" x-text="s.time_ago || 'Recent'"></p>
+                                </div>
+                            </div>
+
+                            <div class="mt-8 flex gap-4">
+                                <template x-if="s.status === 'open'">
+                                    <button @click="resolveSOS(s.id)"
+                                        class="flex-1 py-4 bg-emerald-500 text-white rounded-2xl text-[10px] font-black uppercase tracking-widest hover:bg-emerald-600 shadow-lg shadow-emerald-500/20 transition-all">Close
+                                        Emergency</button>
+                                </template>
+                                <a :href="'https://wa.me/' + s.phone" target="_blank"
+                                    class="w-16 h-16 bg-white border border-slate-200 rounded-2xl flex items-center justify-center text-xl text-emerald-500 hover:bg-emerald-50 transition-all shadow-sm">
+                                    <i class="fab fa-whatsapp"></i>
+                                </a>
+                            </div>
+                        </div>
+                    </template>
+                </div>
+            </div>
+
+            <!-- ADMINS TAB -->
+            <div x-show="currentTab === 'admins'"
+                class="space-y-12 animate-in fade-in slide-in-from-bottom-4 duration-500">
+                <div class="flex justify-between items-center">
+                    <div>
+                        <p class="text-[10px] text-slate-400 font-black uppercase tracking-widest mb-1">Administrative
+                            Privileges</p>
+                        <h4 class="text-2xl font-black text-slate-900">System Controllers</h4>
+                    </div>
+                    <button @click="showAddAdminModal = true"
+                        class="px-8 py-4 bg-sky-500 text-white rounded-2xl text-[10px] font-black uppercase tracking-widest hover:bg-sky-600 shadow-lg shadow-sky-500/20 transition-all">Initialize
+                        Sub-Admin</button>
+                </div>
+
+                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+                    <template x-for="admin in subAdmins" :key="admin.id">
+                        <div
+                            class="bg-white p-8 rounded-[3rem] border border-slate-100 shadow-sm hover:shadow-md transition-all">
+                            <div class="flex justify-between items-start mb-8">
+                                <div class="w-16 h-16 rounded-2xl bg-sky-50 border border-sky-100 flex items-center justify-center font-black text-2xl text-sky-600 shadow-sm"
+                                    x-text="admin.name[0]"></div>
+                                <button @click="deleteAdmin(admin.id)"
+                                    class="text-slate-300 hover:text-red-500 transition-colors">
+                                    <i class="fas fa-trash-can"></i>
+                                </button>
+                            </div>
+                            <h5 class="text-lg font-black text-slate-900" x-text="admin.name"></h5>
+                            <p class="text-xs font-bold text-sky-600/70" x-text="admin.username"></p>
+                            <div class="mt-6 pt-6 border-t border-slate-100">
+                                <span
+                                    class="px-4 py-2 bg-slate-50 border border-slate-100 rounded-full text-[9px] font-black text-slate-400 uppercase tracking-widest">Active
+                                    Controller</span>
+                            </div>
+                        </div>
+                    </template>
+                </div>
+            </div>
+
+            <!-- ALERTS TAB (EXPIRY SCAN) -->
+            <div x-show="currentTab === 'alerts'"
+                class="space-y-12 animate-in fade-in slide-in-from-bottom-4 duration-500">
+                <div
+                    class="bg-white p-12 rounded-[4rem] border border-slate-100 shadow-sm bg-gradient-to-br from-sky-50 to-transparent flex flex-col items-center text-center">
+                    <div
+                        class="w-24 h-24 bg-sky-100 rounded-[2.5rem] flex items-center justify-center text-sky-600 text-4xl mb-8 shadow-inner border border-sky-200">
+                        <i class="fas fa-magnifying-glass-chart"></i>
+                    </div>
+                    <h3 class="text-3xl font-black mb-4 text-slate-900">Network Expiry Audit</h3>
+                    <p
+                        class="text-slate-400 font-bold max-w-xl mb-12 uppercase text-[10px] tracking-widest leading-relaxed">
+                        Instantly scan the entire partner network for expiring stock and send priority terminal alerts
+                        to
+                        all affected pharmacies.</p>
+
+                    <button @click="scanAndAlert()" :disabled="scanning"
+                        class="px-12 py-5 bg-sky-500 text-white rounded-3xl text-sm font-black uppercase tracking-[0.2em] shadow-2xl shadow-sky-500/20 hover:bg-sky-600 transition-all disabled:opacity-50">
+                        <span x-show="!scanning">Initiate Global Scan & Broadcast</span>
+                        <span x-show="scanning" class="flex items-center gap-3 text-white">
+                            <i class="fas fa-circle-notch fa-spin"></i> Analyzing Network Data...
+                        </span>
+                    </button>
+                </div>
+
+                <div x-show="scanResults.length > 0" class="space-y-6">
+                    <h4 class="text-xl font-black uppercase tracking-tight">Identified Risk Batches</h4>
+                    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                        <template x-for="r in scanResults" :key="r.med + r.pharma_id">
+                            <div class="glass p-6 rounded-3xl border border-red-500/20">
+                                <div class="flex justify-between items-start mb-4">
+                                    <p class="text-[10px] font-black text-red-400 uppercase tracking-widest">Expiring
+                                        Soon</p>
+                                    <span class="text-[10px] font-bold text-slate-500" x-text="r.expiry"></span>
+                                </div>
+                                <h5 class="font-black" x-text="r.med"></h5>
+                                <p class="text-[10px] font-bold text-sky-400 mt-1 uppercase" x-text="r.pharma"></p>
+                            </div>
+                        </template>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+    </main>
+
+    <!-- Modals Section -->
+    <template x-if="true"> <!-- Container for modals -->
+        <div>
+            <!-- Add Admin Modal -->
+            <div x-show="showAddAdminModal" x-cloak
+                class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[100] flex items-center justify-center p-6 animate-in fade-in duration-300">
+                <div @click.away="showAddAdminModal = false"
+                    class="bg-white rounded-[3rem] border border-slate-100 max-w-md w-full p-12 shadow-2xl animate-in zoom-in duration-300 relative">
+                    <button @click="showAddAdminModal = false"
+                        class="absolute top-8 right-8 w-10 h-10 rounded-full bg-slate-50 border border-slate-200 flex items-center justify-center text-slate-400 hover:text-slate-600 transition-all">
+                        <i class="fas fa-times"></i>
+                    </button>
+                    <h2 class="text-2xl font-black text-slate-900 mb-2 leading-none">Initialize Controller</h2>
+                    <p class="text-xs text-slate-400 font-bold uppercase tracking-widest mb-10">Assign system-wide
+                        administrative access</p>
+
+                    <form action="/admin/add_sub_admin" method="POST" class="space-y-6">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                        <div class="space-y-4">
+                            <div>
+                                <label
+                                    class="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">Legal
+                                    Identity</label>
+                                <input type="text" name="name" placeholder="Full Name" required
+                                    class="w-full px-6 py-4 bg-slate-50 border border-slate-200 rounded-2xl outline-none focus:border-sky-500 focus:ring-4 focus:ring-sky-500/10 text-sm font-black text-slate-700 transition-all placeholder:text-slate-300">
+                            </div>
+                            <div>
+                                <label
+                                    class="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">Login
+                                    Credentials</label>
+                                <input type="email" name="username" placeholder="Primary Email" required
+                                    class="w-full px-6 py-4 bg-slate-50 border border-slate-200 rounded-2xl outline-none focus:border-sky-500 focus:ring-4 focus:ring-sky-500/10 text-sm font-black text-slate-700 transition-all placeholder:text-slate-300 mb-3">
+                                <input type="password" name="password" placeholder="Secure Access Key" required
+                                    class="w-full px-6 py-4 bg-slate-50 border border-slate-200 rounded-2xl outline-none focus:border-sky-500 focus:ring-4 focus:ring-sky-500/10 text-sm font-black text-slate-700 transition-all placeholder:text-slate-300">
+                            </div>
+                        </div>
+                        <button type="submit"
+                            class="w-full py-5 bg-sky-500 text-white rounded-2xl text-[10px] font-black uppercase tracking-widest shadow-xl shadow-sky-500/20 hover:bg-sky-600 active:scale-95 transition-all mt-4">Deploy
+                            Sub-Admin</button>
+                    </form>
+                </div>
+            </div>
+
+            <!-- Global Alert Modal -->
+            <div x-show="showAlertModal" x-cloak
+                class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[100] flex items-center justify-center p-6 animate-in fade-in duration-300">
+                <div @click.away="showAlertModal = false"
+                    class="bg-white rounded-[3rem] border border-slate-100 max-w-lg w-full p-12 shadow-2xl animate-in zoom-in duration-300 relative">
+                    <button @click="showAlertModal = false"
+                        class="absolute top-8 right-8 w-10 h-10 rounded-full bg-slate-50 border border-slate-200 flex items-center justify-center text-slate-400 hover:text-slate-600 transition-all">
+                        <i class="fas fa-times"></i>
+                    </button>
+                    <h2 class="text-2xl font-black text-slate-900 mb-2 leading-none">Security Broadcast</h2>
+                    <p class="text-xs text-slate-400 font-bold uppercase tracking-widest mb-10">Direct to: <span
+                            x-text="targetPharma.shop_name" class="text-sky-600"></span></p>
+
+                    <div class="space-y-6">
+                        <div>
+                            <label
+                                class="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">Transmission
+                                Message</label>
+                            <textarea x-model="alertMsg" placeholder="Enter transmission details..."
+                                class="w-full px-6 py-4 bg-slate-50 border border-slate-200 rounded-2xl outline-none focus:border-sky-500 focus:ring-4 focus:ring-sky-500/10 text-sm font-bold h-32 resize-none transition-all placeholder:text-slate-300"></textarea>
+                        </div>
+                        <div class="space-y-3">
+                            <label
+                                class="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Alert
+                                Priority</label>
+                            <div class="flex gap-4">
+                                <template x-for="type in ['info', 'warning', 'danger']">
+                                    <button @click="alertType = type" :class="alertType === type ? 
+                                            (type === 'danger' ? 'bg-red-500 text-white shadow-lg shadow-red-200' : 'bg-sky-500 text-white shadow-lg shadow-sky-200') : 
+                                            'bg-slate-50 text-slate-400 border border-slate-100'"
+                                        class="flex-1 py-4 rounded-2xl text-[9px] font-black uppercase tracking-widest transition-all"
+                                        x-text="type"></button>
+                                </template>
+                            </div>
+                        </div>
+                        <button @click="submitAlert()"
+                            class="w-full py-5 bg-slate-900 text-white rounded-2xl text-[10px] font-black uppercase tracking-widest shadow-xl shadow-slate-900/10 hover:bg-slate-800 transition-all flex items-center justify-center gap-3">
+                            <span>Push Secure Alert</span>
+                            <i class="fas fa-paper-plane text-xs"></i>
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Add Hospital Modal -->
+            <div x-show="showAddHospModal" x-cloak
+                class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[100] flex items-center justify-center p-6 animate-in fade-in duration-300">
+                <div @click.away="showAddHospModal = false"
+                    class="bg-white rounded-[4rem] border border-slate-100 max-w-4xl w-full p-12 shadow-2xl animate-in zoom-in duration-300 grid grid-cols-1 lg:grid-cols-2 gap-12 relative overflow-hidden">
+                    <button @click="showAddHospModal = false"
+                        class="absolute top-10 right-10 w-12 h-12 rounded-full bg-slate-50 border border-slate-200 flex items-center justify-center text-slate-400 hover:text-slate-600 transition-all">
+                        <i class="fas fa-times"></i>
+                    </button>
+                    <div class="space-y-10">
+                        <div>
+                            <h2 class="text-3xl font-black text-slate-900 mb-2 leading-none">Hospital Registry</h2>
+                            <p class="text-xs text-slate-400 font-bold uppercase tracking-widest">Integrate emergency
+                                medical centers</p>
+                        </div>
+                        <form id="hospForm" action="/admin/add_hospital_submit" method="POST" class="space-y-6">
+                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                            <div class="space-y-4">
+                                <div>
+                                    <label
+                                        class="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">Facility
+                                        Intelligence</label>
+                                    <input type="text" name="name" placeholder="Hospital Official Name" required
+                                        class="w-full px-8 py-5 bg-slate-50 border border-slate-200 rounded-[2rem] outline-none focus:border-sky-500 focus:ring-4 focus:ring-sky-500/10 text-sm font-black text-slate-700 transition-all placeholder:text-slate-300">
+                                </div>
+                                <input type="text" name="address" placeholder="Central Facility Address" required
+                                    class="w-full px-8 py-5 bg-slate-50 border border-slate-200 rounded-[2rem] outline-none focus:border-sky-500 focus:ring-4 focus:ring-sky-500/10 text-sm font-black text-slate-700 transition-all placeholder:text-slate-300">
+                            </div>
+                        </form>
+                    </div>
+                    <div class="bg-slate-50 p-10 rounded-[3rem] border border-slate-100 space-y-8 shadow-inner">
+                        <h4 class="text-[10px] font-black text-sky-600 uppercase tracking-widest">Medical Transport
+                            Asset</h4>
+                        <div class="space-y-4">
+                            <input type="text" form="hospForm" name="ambulance_no"
+                                placeholder="Vehicle Identifier (Plate)" required
+                                class="w-full px-8 py-5 bg-white border border-slate-200 rounded-2xl outline-none focus:border-sky-500 text-xs font-black text-slate-700 placeholder:text-slate-300 transition-all">
+                            <input type="text" form="hospForm" name="driver_name"
+                                placeholder="Lead Transport Specialist" required
+                                class="w-full px-8 py-5 bg-white border border-slate-200 rounded-2xl outline-none focus:border-sky-500 text-xs font-black text-slate-700 placeholder:text-slate-300 transition-all">
+                            <input type="text" form="hospForm" name="driver_no" placeholder="Transport Communication"
+                                required
+                                class="w-full px-8 py-5 bg-white border border-slate-200 rounded-2xl outline-none focus:border-sky-500 text-xs font-black text-slate-700 placeholder:text-slate-300 transition-all">
+                        </div>
+                        <button type="submit" form="hospForm"
+                            class="w-full py-5 bg-emerald-500 text-white rounded-[2rem] text-[10px] font-black uppercase tracking-widest shadow-xl shadow-emerald-500/20 hover:bg-emerald-600 active:scale-95 transition-all mt-6">Authorize
+                            Integration</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Add Ambulance Modal -->
+            <div x-show="showAddAmbModal" x-cloak
+                class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[100] flex items-center justify-center p-6 animate-in fade-in duration-300">
+                <div @click.away="showAddAmbModal = false"
+                    class="bg-white rounded-[3rem] border border-slate-100 max-w-md w-full p-12 shadow-2xl animate-in zoom-in duration-300 relative">
+                    <button @click="showAddAmbModal = false"
+                        class="absolute top-8 right-8 w-10 h-10 rounded-full bg-slate-50 border border-slate-200 flex items-center justify-center text-slate-400 hover:text-slate-600 transition-all">
+                        <i class="fas fa-times"></i>
+                    </button>
+                    <h2 class="text-2xl font-black text-slate-900 mb-2 leading-none">Deploy Ambulance</h2>
+                    <p class="text-xs text-slate-400 font-bold uppercase tracking-widest mb-10">Commission new transport
+                        unit</p>
+
+                    <form action="/admin/add_ambulance_submit" method="POST" class="space-y-6">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                        <div class="space-y-4">
+                            <input type="text" name="ambulance_no" placeholder="Vehicle Plate Number" required
+                                class="w-full px-6 py-4 bg-slate-50 border border-slate-200 rounded-2xl outline-none focus:border-red-500 focus:ring-4 focus:ring-red-500/10 text-sm font-black text-slate-700 transition-all">
+                            <input type="text" name="driver_name" placeholder="Driver Name" required
+                                class="w-full px-6 py-4 bg-slate-50 border border-slate-200 rounded-2xl outline-none focus:border-red-500 focus:ring-4 focus:ring-red-500/10 text-sm font-black text-slate-700 transition-all">
+                            <input type="text" name="driver_no" placeholder="Driver Phone" required
+                                class="w-full px-6 py-4 bg-slate-50 border border-slate-200 rounded-2xl outline-none focus:border-red-500 focus:ring-4 focus:ring-red-500/10 text-sm font-black text-slate-700 transition-all">
+                        </div>
+                        <button type="submit"
+                            class="w-full py-5 bg-red-500 text-white rounded-2xl text-[10px] font-black uppercase tracking-widest shadow-xl shadow-red-500/20 hover:bg-red-600 active:scale-95 transition-all mt-4">Commission
+                            Unit</button>
+                    </form>
+                </div>
+            </div>
+
+        </div>
+    </template>
+
+
+
+
+    <script>
+        function adminSystem() {
+            return {
+                currentTab: 'overview',
+                adminName: '{{ current_user.name }}',
+                adminRole: '{{ current_user.role }}',
+
+                // Modals
+                showAddAdminModal: false,
+                showAddHospModal: false,
+                showAddAmbModal: false,
+                showAlertModal: false,
+
+                // Alerts & Notifications
+                targetPharma: { shop_name: '' },
+                alertMsg: '',
+                alertType: 'info',
+                scanning: false,
+                scanResults: [],
+
+                // Search & Filter
+                search: '',
+                medicineSearch: '',
+                pharmacyFilterSnippet: '', // For viewing stock of specific pharmacy
+
+                // DATA INJECTION
+                pharmacies: {{ pharmacies_json | safe }
+        },
+        subAdmins: { { sub_admins_json | safe } },
+        hospitals: { { hospitals_json | safe } },
+        medicines: { { medicines_json | safe } },
+        ambulances: { { ambulances_json | safe } },
+        recentSOS: { { emergencies_json | safe } },
+
+        stats: {
+            pharmacies: { { pharmacies_count } },
+            hospitals: { { hospitals_count } },
+            medicines: { { medicines_count } },
+            ambulances: { { ambulances_count } }
+        },
+
+        tabs: [
+            { id: 'overview', name: 'Control Center', icon: 'fas fa-grid-2' },
+            { id: 'pharmacies', name: 'Pharmacy Network', icon: 'fas fa-store' },
+            { id: 'medicines', name: 'Master Inventory', icon: 'fas fa-pills' },
+            { id: 'ambulances', name: 'Rescue Fleet', icon: 'fas fa-truck-medical' },
+            { id: 'sos', name: 'Emergency Feed', icon: 'fas fa-broadcast-tower' },
+            { id: 'admins', name: 'Access Control', icon: 'fas fa-user-shield' },
+            { id: 'alerts', name: 'Network Audit', icon: 'fas fa-clipboard-check' },
+        ],
+
+            init() {
+            console.log('MedLink Control Center Online');
+        },
+
+                // Getters
+                get pendingCount() {
+            return this.pharmacies.filter(p => !p.verified).length;
+        },
+
+                get expiringCount() {
+            return this.medicines.filter(m => this.isNearExpiry(m.expiry)).length;
+        },
+
+                get filteredPharmacies() {
+            if (!this.search) return this.pharmacies;
+            const q = this.search.toLowerCase();
+            return this.pharmacies.filter(p =>
+                p.shop_name.toLowerCase().includes(q) ||
+                (p.dl_no && p.dl_no.toLowerCase().includes(q))
+            );
+        },
+
+                get filteredMedicines() {
+            let list = this.medicines;
+            if (this.pharmacyFilterSnippet) {
+                list = list.filter(m => m.pharmacy_name === this.pharmacyFilterSnippet);
+            }
+            if (this.medicineSearch) {
+                const q = this.medicineSearch.toLowerCase();
+                list = list.filter(m =>
+                    m.name.toLowerCase().includes(q) ||
+                    m.pharmacy_name.toLowerCase().includes(q)
+                );
+            }
+            return list;
+        },
+
+                get filteredSOS() {
+            return this.recentSOS;
+        },
+
+        // Core Methods
+        isNearExpiry(date) {
+            const d = new Date(date);
+            const today = new Date();
+            const diff = (d - today) / (1000 * 60 * 60 * 24);
+            return diff < 30;
+        },
+
+        viewPharmacyStock(name) {
+            this.pharmacyFilterSnippet = name;
+            this.medicineSearch = '';
+            this.currentTab = 'medicines';
+        },
+
+                // Action API Calls
+                async verifyPharma(id) {
+            const res = await fetch(`/admin/verify_pharmacy/${id}`);
+            if (res.ok) location.reload();
+        },
+
+                async deletePharma(id) {
+            if (confirm('Permanently remove this pharmacy?')) {
+                const res = await fetch(`/admin/reject_pharmacy/${id}`);
+                if (res.ok) location.reload();
+            }
+        },
+
+                async deleteMedicine(id) {
+            if (confirm('Remove this medicine from system?')) {
+                const res = await fetch(`/admin/delete_medicine/${id}`);
+                if (res.ok) location.reload();
+            }
+        },
+
+                async deleteAmbulance(id) {
+            if (confirm('Decommission this unit?')) {
+                const res = await fetch(`/admin/delete_ambulance/${id}`);
+                if (res.ok) location.reload();
+            }
+        },
+
+                async deleteAdmin(id) {
+            if (confirm('Revoke access for this sub-admin?')) {
+                const res = await fetch(`/admin/remove_sub_admin/${id}`);
+                if (res.ok) location.reload();
+            }
+        },
+
+                async resolveSOS(id) {
+            const res = await fetch(`/admin/resolve_broadcast/${id}`, { method: 'POST' });
+            if (res.ok) location.reload();
+        },
+
+        // Messaging System
+        openAlertModal(pharma) {
+            this.targetPharma = pharma;
+            this.alertMsg = '';
+            this.showAlertModal = true;
+        },
+
+                async submitAlert() {
+            const res = await fetch('/admin/send_alert', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    pharmacy_id: this.targetPharma.id,
+                    message: this.alertMsg,
+                    type: this.alertType
+                })
+            });
+            if (res.ok) {
+                this.showAlertModal = false;
+                alert('Alert pushed to pharmacy terminal.');
+            }
+        },
+
+                // Global Scan
+                async scanAndAlert() {
+            this.scanning = true;
+            this.scanResults = [];
+
+            const nearExpiry = this.medicines.filter(m => this.isNearExpiry(m.expiry));
+
+            for (const m of nearExpiry) {
+                this.scanResults.push({
+                    med: m.name,
+                    pharma: m.pharmacy_name,
+                    pharma_id: m.pharmacy_id,
+                    expiry: m.expiry
+                });
+
+                // Send auto-alert
+                await fetch('/admin/send_alert', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        pharmacy_id: m.pharmacy_id,
+                        message: `CRITICAL: Item "${m.name}" is expiring on ${m.expiry}. Please audit stock.`,
+                        type: 'danger'
+                    })
+                });
+            }
+
+            this.scanning = false;
+            alert('Scan complete. Expiry notifications broadcasted.');
+        }
+            };
+        }
+    </script>
+
+
+
+</body>
+
+</html>
