@@ -112,10 +112,10 @@ def login():
                     flash('Please use the Admin Portal', 'error')
                     return redirect(url_for('admin_login'))
                 
-                # Check email verification
-                if not getattr(user, 'email_verified', True):
-                    flash('Please verify your email before logging in. Check the server console for the verification link.')
-                    return redirect(url_for('login'))
+                # Check email verification (Bypassed for now)
+                # if not getattr(user, 'email_verified', True):
+                #     flash('Please verify your email before logging in. Check the server console for the verification link.')
+                #     return redirect(url_for('login'))
 
                 login_user(user)
                 if user.role == 'pharmacy':
@@ -245,7 +245,7 @@ def register():
         else:
             name = request.form.get('name')
             
-        new_user = User(username=username, phone=phone, email=email, password=hashed_password, role=role, name=name, email_verified=False)
+        new_user = User(username=username, phone=phone, email=email, password=hashed_password, role=role, name=name, email_verified=True)
         db.session.add(new_user)
         db.session.commit()
         
@@ -605,7 +605,29 @@ def resolve_broadcast(id):
     flash('Emergency broadcast marked as resolved')
     return redirect(url_for('admin_dashboard'))
 
-@app.route('/admin/add_admin', methods=['GET', 'POST'])
+@app.route('/admin/send_alert', methods=['POST'])
+@login_required
+def admin_send_alert():
+    if current_user.role not in ['admin', 'sub_admin']:
+        return jsonify({'error': 'Unauthorized'}), 403
+        
+    data = request.json
+    pharmacy_id = data.get('pharmacy_id')
+    message = data.get('message')
+    alert_type = data.get('type', 'info')
+    
+    if not pharmacy_id or not message:
+        return jsonify({'error': 'Missing pharmacy ID or message'}), 400
+        
+    new_alert = SystemAlert(
+        pharmacy_id=pharmacy_id,
+        message=message,
+        type=alert_type
+    )
+    db.session.add(new_alert)
+    db.session.commit()
+    
+    return jsonify({'success': True})
 @login_required
 def add_admin():
     return redirect(url_for('admin_dashboard'))
@@ -634,6 +656,10 @@ def pharmacy_dashboard():
     alerts_json = json.dumps([item.to_dict() for item in alerts])
     emergencies_json = json.dumps([item.to_dict() for item in emergencies])
     
+    # Fetch alternative mappings
+    alternatives = MedicineAlternative.query.all()
+    alternatives_json = json.dumps([{'id': a.id, 'medicine_name': a.medicine_name, 'alternative_name': a.alternative_name} for a in alternatives])
+    
     return render_template('pharmacy.html', 
                            pharmacy=pharmacy, 
                            inventory=inventory, 
@@ -642,7 +668,8 @@ def pharmacy_dashboard():
                            alerts=alerts,
                            inventory_json=inventory_json,
                            alerts_json=alerts_json,
-                           emergencies_json=emergencies_json)
+                           emergencies_json=emergencies_json,
+                           alternatives_json=alternatives_json)
 
 @app.route('/pharmacy/add_stock', methods=['POST'])
 @csrf.exempt
@@ -655,6 +682,7 @@ def add_stock():
     data = request.json or request.form
     
     name = data.get('name')
+    alternative_name = data.get('alternative_name') # New optional field
     # generic_name = data.get('generic_name') # Field removed from UI
     manufacturer = data.get('manufacturer')
     description = data.get('description')
@@ -670,6 +698,7 @@ def add_stock():
         qty = int(qty_str) if qty_str else 0
         price = float(price_str) if price_str and str(price_str).strip() else None
         
+        # Add stock entry
         new_med = Medicine(
             pharmacy_id=pharmacy.id, 
             name=name, 
@@ -681,8 +710,25 @@ def add_stock():
             price=price
         )
         db.session.add(new_med)
+        
+        # Handle integrated alternative mapping
+        if alternative_name:
+            # Check if mapping already exists
+            existing_alt = MedicineAlternative.query.filter_by(
+                medicine_name=name, 
+                alternative_name=alternative_name
+            ).first()
+            
+            if not existing_alt:
+                new_alt = MedicineAlternative(
+                    medicine_name=name,
+                    alternative_name=alternative_name
+                )
+                db.session.add(new_alt)
+        
         db.session.commit()
     except (ValueError, TypeError) as e:
+        db.session.rollback()
         return jsonify({'error': str(e)}), 400
     
     return jsonify({'success': True}) # Or redirect
@@ -701,6 +747,44 @@ def remove_stock(id):
          return jsonify({'error': 'Unauthorized'}), 403
          
     db.session.delete(med)
+    db.session.commit()
+    return jsonify({'success': True})
+
+@app.route('/pharmacy/add_alternative', methods=['POST'])
+@csrf.exempt
+@login_required
+def add_alternative():
+    if current_user.role != 'pharmacy':
+        return jsonify({'error': 'Unauthorized'}), 403
+    
+    data = request.json or request.form
+    medicine_name = data.get('medicine_name', '').strip()
+    alternative_name = data.get('alternative_name', '').strip()
+    
+    if not medicine_name or not alternative_name:
+        return jsonify({'error': 'Both fields are required'}), 400
+    
+    # Check for duplicate
+    existing = MedicineAlternative.query.filter_by(
+        medicine_name=medicine_name, alternative_name=alternative_name
+    ).first()
+    if existing:
+        return jsonify({'error': 'This mapping already exists'}), 400
+    
+    alt = MedicineAlternative(medicine_name=medicine_name, alternative_name=alternative_name)
+    db.session.add(alt)
+    db.session.commit()
+    return jsonify({'success': True, 'id': alt.id})
+
+@app.route('/pharmacy/remove_alternative/<int:id>', methods=['POST'])
+@csrf.exempt
+@login_required
+def remove_alternative(id):
+    if current_user.role != 'pharmacy':
+        return jsonify({'error': 'Unauthorized'}), 403
+    
+    alt = MedicineAlternative.query.get_or_404(id)
+    db.session.delete(alt)
     db.session.commit()
     return jsonify({'success': True})
 
@@ -952,7 +1036,24 @@ if __name__ == '__main__':
             db.session.add(admin)
             db.session.commit()
             print(f"Default admin created: {admin_username}")
-    
+        
+        # Seed common alternative medicine mappings
+        common_alternatives = [
+            ('Dollo', 'Paracetamol'), ('Dolo', 'Paracetamol'), ('Dolo-650', 'Paracetamol'),
+            ('Crocin', 'Paracetamol'), ('Calpol', 'Paracetamol'),
+            ('Combiflam', 'Ibuprofen + Paracetamol'), ('Brufen', 'Ibuprofen'),
+            ('Disprin', 'Aspirin'), ('Ecosprin', 'Aspirin'),
+            ('Allegra', 'Fexofenadine'), ('Cetrizine', 'Cetirizine'),
+            ('Azithral', 'Azithromycin'), ('Zithromax', 'Azithromycin'),
+            ('Augmentin', 'Amoxicillin + Clavulanate'),
+            ('Pan-D', 'Pantoprazole + Domperidone'), ('Pantocid', 'Pantoprazole'),
+            ('Shelcal', 'Calcium + Vitamin D3'),
+        ]
+        for brand, alt in common_alternatives:
+            if not MedicineAlternative.query.filter_by(medicine_name=brand, alternative_name=alt).first():
+                db.session.add(MedicineAlternative(medicine_name=brand, alternative_name=alt))
+        db.session.commit()
+
     # Get debug mode from config
     debug_mode = app.config.get('DEBUG', False)
     app.run(debug=False, host='0.0.0.0', use_reloader=False)

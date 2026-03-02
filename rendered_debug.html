@@ -42,19 +42,15 @@
         </div>
 
         <div class="glass-panel rounded-[2.5rem] shadow-2xl shadow-slate-200/60 p-8 md:p-10">
-            {% with messages = get_flashed_messages() %}
-            {% if messages %}
-            <div class="mb-6 p-4 rounded-xl bg-amber-50 text-amber-600 text-xs font-bold border border-amber-100">
-                {% for message in messages %}<p>{{ message }}</p>{% endfor %}
-            </div>
-            {% endif %}
-            {% endwith %}
+            
+            
+            
 
             <h1 class="text-2xl font-extrabold text-slate-900 mb-2">Welcome Back</h1>
             <p class="text-slate-400 text-sm font-medium mb-8">Login to manage your profile</p>
 
             <form method="POST" action="/login" class="space-y-6">
-                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <input type="hidden" name="csrf_token" value="Ijg1MjcwMjg1YWYzMDgwNjE2YjdkMzIyNTY4YTY1YmQxMjY3Yjk1MDQi.aaXcWQ.jFWTdlLGGrzf4TvT5_5wrgG9nM8">
                 <div class="space-y-2">
                     <label class="block text-xs font-black text-slate-400 uppercase tracking-widest ml-1">Gmail or Username</label>
                     <input type="text" name="identifier" required placeholder="gmail or username"
@@ -65,7 +61,7 @@
                     <div class="flex justify-between items-center ml-1">
                         <label
                             class="block text-xs font-black text-slate-400 uppercase tracking-widest">Password</label>
-                        <a href="{{ url_for('forgot_password') }}" class="text-[10px] font-bold text-teal-700 hover:underline">Forgot Password?</a>
+                        <a href="/forgot_password" class="text-[10px] font-bold text-teal-700 hover:underline">Forgot Password?</a>
                     </div>
                     <div class="relative">
                         <input :type="showPw ? 'text' : 'password'" name="password" required placeholder="&#8226;&#8226;&#8226;&#8226;&#8226;&#8226;&#8226;&#8226;"
@@ -86,7 +82,7 @@
             <div class="mt-8 pt-6 border-t border-slate-100 text-center">
                 <p class="text-slate-400 text-sm font-medium">
                     New to MedLink?
-                    <a href="{{ url_for('register') }}" class="text-teal-700 font-bold hover:text-teal-800 ml-1">Join
+                    <a href="/register" class="text-teal-700 font-bold hover:text-teal-800 ml-1">Join
                         the Network</a>
                 </p>
             </div>

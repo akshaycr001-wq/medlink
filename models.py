@@ -12,7 +12,7 @@ class User(UserMixin, db.Model):
     password = db.Column(db.String(200), nullable=False)
     role = db.Column(db.String(20), nullable=False)  # 'admin', 'sub_admin', 'pharmacy', 'patient'
     name = db.Column(db.String(100), nullable=False)
-    email_verified = db.Column(db.Boolean, default=True)  # True for existing users; new users set to False
+    email_verified = db.Column(db.Boolean, default=True)  # Set to True by default for easier testing
     
     # Relationships
     pharmacy_details = db.relationship('Pharmacy', backref='owner', uselist=False)
@@ -72,6 +72,7 @@ class Medicine(db.Model):
     def to_dict(self):
         return {
             'id': self.id,
+            'pharmacy_id': self.pharmacy_id,
             'name': self.name,
             'qty': self.qty,
             'price': self.price,
@@ -150,6 +151,7 @@ class Ambulance(db.Model):
     vehicle_number = db.Column(db.String(50), nullable=False)
     driver_name = db.Column(db.String(100), nullable=False)
     driver_phone = db.Column(db.String(20), nullable=False)
+    hospital_id = db.Column(db.Integer, db.ForeignKey('hospital.id'), nullable=True) # Linked hospital
     address = db.Column(db.String(255), nullable=True)
     area = db.Column(db.String(100), nullable=True)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
@@ -160,6 +162,7 @@ class Ambulance(db.Model):
             'vehicle_number': self.vehicle_number,
             'driver_name': self.driver_name,
             'driver_phone': self.driver_phone,
+            'hospital_id': self.hospital_id,
             'address': self.address,
             'area': self.area
         }

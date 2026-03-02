@@ -1,4 +1,6 @@
-<!DOCTYPE html>
+"""Script to write the correct login.html with Gmail/Username support, eye icon, AND CSRF token."""
+
+content = r"""<!DOCTYPE html>
 <html lang="en">
 
 <head>
@@ -95,4 +97,18 @@
 
 </body>
 
-</html>
+</html>"""
+
+with open('templates/login.html', 'w', encoding='utf-8') as f:
+    f.write(content)
+
+print("Done! login.html written with Gmail/Username + eye icon + CSRF token.")
+
+# Verify the write
+with open('templates/login.html', 'r', encoding='utf-8') as f:
+    data = f.read()
+    print("Gmail or Username in file:", "Gmail or Username" in data)
+    print("Alpine x-data in file:", "x-data" in data)
+    print("Eye icon in file:", "fa-eye" in data)
+    print("identifier field in file:", 'name="identifier"' in data)
+    print("CSRF token in file:", 'csrf_token()' in data)
