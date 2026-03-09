@@ -29,7 +29,11 @@ class DevelopmentConfig(Config):
     db_url = os.environ.get('DATABASE_URL')
     if db_url and db_url.startswith("postgres://"):
         db_url = db_url.replace("postgres://", "postgresql://", 1)
-    SQLALCHEMY_DATABASE_URI = db_url or 'sqlite:///medlink.db'
+    
+    if not db_url:
+        raise RuntimeError("DATABASE_URL is not set. PostgreSQL is required.")
+    
+    SQLALCHEMY_DATABASE_URI = db_url
     SQLALCHEMY_ECHO = False  # Set to True to see SQL queries
 
 class ProductionConfig(Config):
@@ -41,7 +45,11 @@ class ProductionConfig(Config):
     db_url = os.environ.get('DATABASE_URL')
     if db_url and db_url.startswith("postgres://"):
         db_url = db_url.replace("postgres://", "postgresql://", 1)
-    SQLALCHEMY_DATABASE_URI = db_url or 'sqlite:///medlink.db'
+    
+    if not db_url:
+        raise RuntimeError("DATABASE_URL is not set in Production. PostgreSQL is required.")
+        
+    SQLALCHEMY_DATABASE_URI = db_url
     
     # Force secure cookies in production
     SESSION_COOKIE_SECURE = True

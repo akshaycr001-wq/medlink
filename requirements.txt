@@ -10,3 +10,5 @@ psycopg2-binary
 gunicorn
 email-validator
 flask-migrate
+flask-mail
+apscheduler

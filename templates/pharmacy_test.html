@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="en">
 
 <head>
@@ -63,6 +63,10 @@
         </div>
 
         <div class="flex items-center gap-4">
+            <button @click="simulateBroadcast()"
+                class="hidden md:flex items-center gap-2 px-4 py-2 bg-red-50 text-red-600 rounded-xl text-[10px] font-black uppercase hover:bg-red-100 transition-all border border-red-100">
+                <i class="fas fa-bullhorn"></i> Simulate User SOS
+            </button>
             <div class="h-8 w-[1px] bg-slate-200 mx-2"></div>
             <a href="{{ url_for('logout') }}"
                 class="flex items-center gap-2 px-5 py-2.5 bg-slate-900 text-white rounded-xl text-[11px] font-black uppercase tracking-widest hover:bg-red-600 transition-all duration-300 shadow-lg shadow-slate-900/20 group">
@@ -99,75 +103,17 @@
                 </div>
             </div>
 
-            <div class="glass-card p-8 rounded-[2.5rem] shadow-sm border-slate-100/50">
-                <h3
-                    class="text-[11px] font-black text-slate-400 uppercase tracking-widest mb-6 flex items-center gap-2">
-                    <i class="fas fa-envelope-open-text text-teal-600"></i> Admin Messages
-                </h3>
-                <div class="space-y-3 max-h-60 overflow-y-auto pr-2">
-                    <template x-for="alert in alerts" :key="alert.id">
-                        <div class="p-4 rounded-2xl border transition-all" :class="{
-                                'bg-blue-50 border-blue-100': alert.type === 'info',
-                                'bg-amber-50 border-amber-100': alert.type === 'warning',
-                                'bg-red-50 border-red-100': alert.type === 'danger'
-                             }">
-                            <p class="text-[10px] font-bold text-slate-900 leading-relaxed" x-text="alert.msg"></p>
-                            <span class="text-[8px] font-black text-slate-400 uppercase mt-2 block tracking-widest"
-                                x-text="alert.time"></span>
-                        </div>
-                    </template>
-                    <div x-show="alerts.length === 0"
-                        class="text-center py-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest">
-                        No messages from admin.
-                    </div>
-                </div>
-            </div>
-
 
             <div class="glass-card p-8 rounded-[2.5rem] shadow-sm">
                 <h3
                     class="text-[11px] font-black text-slate-400 uppercase tracking-widest mb-6 flex items-center gap-2">
                     <i class="fas fa-star text-amber-400"></i> Customer Feedback
                 </h3>
-                <div class="space-y-4 max-h-80 overflow-y-auto pr-2">
+                <div class="space-y-4 max-h-48 overflow-y-auto">
                     {% for review in reviews %}
-                    <div class="p-5 bg-slate-50 rounded-2xl border border-slate-100 space-y-3">
-                        <div class="flex justify-between items-center">
-                            <div>
-                                <p class="text-[9px] font-black text-slate-800 uppercase">{{ review.user_name }}</p>
-                                <div class="flex items-center gap-0.5 mt-0.5">
-                                    {% for i in range(review.rating) %}
-                                    <i class="fas fa-star text-amber-400 text-[8px]"></i>
-                                    {% endfor %}
-                                    {% for i in range(5 - review.rating) %}
-                                    <i class="far fa-star text-slate-300 text-[8px]"></i>
-                                    {% endfor %}
-                                </div>
-                            </div>
-                            <span class="text-[8px] font-bold text-slate-400">{{ review.created_at.strftime('%H:%M') if
-                                review.created_at else '' }}</span>
-                        </div>
-                        <p class="text-xs text-slate-600 font-medium leading-relaxed">{{ review.comment }}</p>
-
-                        <!-- Pharmacy Reply Section -->
-                        <div class="pt-3 border-t border-slate-200/60 mt-2">
-                            {% if review.pharmacy_reply %}
-                            <div class="bg-white p-3 rounded-xl border border-slate-200 shadow-sm">
-                                <p class="text-[8px] font-black text-teal-700 uppercase mb-1 tracking-widest">Your Reply
-                                </p>
-                                <p class="text-xs text-slate-500 italic">{{ review.pharmacy_reply }}</p>
-                            </div>
-                            {% else %}
-                            <div class="flex gap-2">
-                                <input id="reply-input-{{ review.id }}" type="text" placeholder="Type a reply..."
-                                    class="flex-1 px-3 py-2 bg-white border border-slate-200 rounded-xl text-xs outline-none focus:border-teal-500">
-                                <button type="button" onclick="sendReply({{ review.id }})"
-                                    class="px-4 py-2 bg-teal-700 text-white rounded-xl text-[9px] font-bold uppercase tracking-widest hover:bg-teal-800 transition-all">
-                                    Send
-                                </button>
-                            </div>
-                            {% endif %}
-                        </div>
+                    <div class="p-4 bg-slate-50 rounded-2xl border border-slate-100">
+                        <p class="text-[9px] font-black text-slate-800 uppercase">{{ review.user_name }}</p>
+                        <p class="text-xs text-slate-500 italic mt-1">{{ review.comment }}</p>
                     </div>
                     {% else %}
                     <div class="p-4 bg-slate-50 rounded-2xl border border-slate-100 text-center text-xs text-slate-400">
@@ -238,130 +184,71 @@
         </div>
     </main>
 
-    <script id="inventory-data" type="application/json">{{ inventory_json | safe | default('[]') }}</script>
-    <script id="alerts-data" type="application/json">{{ alerts_json | safe | default('[]') }}</script>
-    <script id="emergencies-data" type="application/json">{{ emergencies_json | safe | default('[]') }}</script>
-
     <script>
-        // DATA INJECTION (Read from JSON script tags to prevent linter confusion)
-        const injectedInventory = JSON.parse(document.getElementById('inventory-data').textContent);
-        const injectedAlerts = JSON.parse(document.getElementById('alerts-data').textContent);
-        const injectedEmergencies = JSON.parse(document.getElementById('emergencies-data').textContent);
+        function pharmacyApp() {
+            return {
+                form: { name: '', alternative_name: '', qty: '', price: '', expiry: '' },
 
-        // Standalone reply function (not inside Alpine scope)
-        async function sendReply(reviewId) {
-            const input = document.getElementById('reply-input-' + reviewId);
-            const reply = input ? input.value.trim() : '';
-            console.log('sendReply called:', reviewId, reply);
-            if (!reply) return alert('Please enter a reply');
+                // DATA INJECTION
+                inventory: {{ inventory_json | safe | default ('[]') }
+        },
+        alerts: { { alerts_json | safe | default ('[]') } },
+        emergencies: ({{ emergencies_json | safe | default ('[]') }}).map(e => ({
+            id: e.id,
+            med: e.medicine_name,
+            dist: 'Nearby',
+            time: e.created_at,
+            phone: e.patient_phone
+        })),
+
+            init() {
+            console.log('Pharmacy Terminal Live');
+        },
+
+        simulateBroadcast() {
+            const meds = ['Asthma Inhaler', 'Nitroglycerin', 'Epinephrine'];
+            this.emergencies.unshift({
+                id: Date.now(),
+                med: meds[Math.floor(Math.random() * meds.length)],
+                dist: (Math.random() * 4.8).toFixed(1) + 'km away',
+                time: 'Now',
+                phone: '910001112233'
+            });
+        },
+
+                async addStock() {
+            if (!this.form.name || !this.form.expiry) return;
             try {
-                const response = await fetch('/pharmacy/feedback-reply/' + reviewId, {
+                const response = await fetch('/pharmacy/add_stock', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
                         'X-CSRFToken': '{{ csrf_token() }}'
                     },
-                    body: JSON.stringify({ reply: reply })
+                    body: JSON.stringify(this.form)
                 });
-                if (response.ok) {
-                    alert('Reply sent successfully!');
-                    window.location.reload();
-                } else {
-                    const text = await response.text();
-                    alert('Error ' + response.status + ': ' + text.substring(0, 100));
-                }
-            } catch (error) {
-                console.error('Fetch error:', error);
-                alert('Network error: ' + error.message);
-            }
-        }
-
-        function pharmacyApp() {
-            return {
-                form: { name: '', alternative_name: '', qty: '', price: '', expiry: '' },
-
-                inventory: injectedInventory,
-                alerts: injectedAlerts,
-                emergencies: injectedEmergencies.map(e => ({
-                    id: e.id,
-                    med: e.medicine_name,
-                    dist: 'Nearby',
-                    time: e.created_at,
-                    phone: e.patient_phone
-                })),
-
-                init() {
-                    console.log('Pharmacy Terminal Live');
-                },
-
-                async replyToReview(reviewId, reply) {
-                    console.log('Replying to review:', reviewId, reply);
-                    if (!reply) return alert('Please enter a reply');
-                    try {
-                        const response = await fetch(`/pharmacy/feedback-reply/${reviewId}`, {
-                            method: 'POST',
-                            headers: {
-                                'Content-Type': 'application/json',
-                                'X-CSRFToken': '{{ csrf_token() }}'
-                            },
-                            body: JSON.stringify({ reply: reply })
-                        });
-
-                        let data;
-                        try {
-                            const clonedResponse = response.clone();
-                            data = await clonedResponse.json();
-                        } catch (e) {
-                            const text = await response.text();
-                            alert(`Server returned ${response.status}: ${text.substring(0, 100)}`);
-                            return;
-                        }
-
-                        console.log('Reply response:', data);
-                        if (response.ok) {
-                            window.location.reload();
-                        } else {
-                            alert('Error: ' + (data.error || 'Unknown error'));
-                        }
-                    } catch (error) {
-                        console.error('Fetch error:', error);
-                        alert(`Fetch Error: ${error.message}`);
-                    }
-                },
-
-                async addStock() {
-                    if (!this.form.name || !this.form.expiry) return;
-                    try {
-                        const response = await fetch('/pharmacy/add_stock', {
-                            method: 'POST',
-                            headers: {
-                                'Content-Type': 'application/json',
-                                'X-CSRFToken': '{{ csrf_token() }}'
-                            },
-                            body: JSON.stringify(this.form)
-                        });
-                        if (response.ok) { window.location.reload(); }
-                    } catch (error) { alert('Error adding stock'); }
-                },
+                if (response.ok) { window.location.reload(); }
+            } catch (error) { alert('Error adding stock'); }
+        },
 
                 async removeStock(id) {
-                    if (!confirm("Delete this item?")) return;
-                    try {
-                        const response = await fetch(`/pharmacy/remove_stock/${id}`, {
-                            method: 'POST',
-                            headers: { 'X-CSRFToken': '{{ csrf_token() }}' }
-                        });
-                        if (response.ok) {
-                            this.inventory = this.inventory.filter(i => i.id !== id);
-                        }
-                    } catch (error) { alert('Error removing stock'); }
-                },
-
-                isExpiring(date) {
-                    const exp = new Date(date);
-                    const today = new Date();
-                    return exp < today || (exp - today) < (30 * 24 * 60 * 60 * 1000);
+            if (!confirm("Delete this item?")) return;
+            try {
+                const response = await fetch(`/pharmacy/remove_stock/${id}`, {
+                    method: 'POST',
+                    headers: { 'X-CSRFToken': '{{ csrf_token() }}' }
+                });
+                if (response.ok) {
+                    this.inventory = this.inventory.filter(i => i.id !== id);
                 }
+            } catch (error) { alert('Error removing stock'); }
+        },
+
+        isExpiring(date) {
+            const exp = new Date(date);
+            const today = new Date();
+            return exp < today || (exp - today) < (30 * 24 * 60 * 60 * 1000);
+        }
             }
         }
     </script>

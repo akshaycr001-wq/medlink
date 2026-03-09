@@ -38,7 +38,7 @@
             </div>
             <div class="flex items-center gap-6">
                 <span class="hidden md:inline text-sm font-bold text-slate-500 uppercase tracking-widest"
-                    x-text="'Welcome, {{ current_user.name }}'"></span>
+                    x-text="'Welcome, {{ current_user.username }}'"></span>
                 <a href="{{ url_for('logout') }}" class="text-slate-400 hover:text-red-500 transition-colors">
                     <i class="fas fa-power-off text-xl"></i>
                 </a>
@@ -153,10 +153,51 @@
                 </div>
 
                 <div class="bg-white rounded-[2.5rem] p-10 shadow-sm border border-slate-100">
-                    <h3 class="text-xl font-black mb-8 flex items-center space-x-3">
-                        <i class="fas fa-hospital-user text-teal-600"></i>
-                        <span>Hospitals & Ambulances (15km) </span>
-                    </h3>
+                    <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6">
+                        <h3 class="text-xl font-black flex items-center space-x-3">
+                            <i class="fas fa-hospital-user text-teal-600"></i>
+                            <span>Hospitals &amp; Ambulances</span>
+                        </h3>
+                        <div class="flex items-center gap-2 w-full md:w-auto">
+                            <div class="relative flex-1 md:w-56">
+                                <input type="text" x-model="locationQuery" @keydown.enter="loadNearby()"
+                                    placeholder="Type city (e.g. Kochi)..."
+                                    class="w-full pl-9 pr-8 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold focus:ring-2 focus:ring-teal-500/20 outline-none transition-all">
+                                <i
+                                    class="fas fa-search absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-[10px]"></i>
+                                <button @click="loadNearby()"
+                                    class="absolute right-2 top-1/2 -translate-y-1/2 text-teal-600 hover:text-teal-700">
+                                    <i class="fas fa-arrow-right text-[10px]"></i>
+                                </button>
+                            </div>
+                            <button @click="getUserLocation()"
+                                :class="locationStatus === 'granted' ? 'bg-teal-500 text-white' : locationStatus === 'denied' ? 'bg-red-100 text-red-600' : 'bg-slate-100 text-slate-600 hover:bg-teal-50 hover:text-teal-700'"
+                                class="flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-black uppercase tracking-widest transition-all whitespace-nowrap">
+                                <i
+                                    :class="locationStatus === 'loading' ? 'fas fa-circle-notch fa-spin' : 'fas fa-location-crosshairs'"></i>
+                                <span
+                                    x-text="locationStatus === 'granted' ? 'GPS Active' : locationStatus === 'denied' ? 'Denied' : locationStatus === 'loading' ? '...' : 'Use GPS'"></span>
+                            </button>
+                        </div>
+                    </div>
+                    <div x-show="locationStatus === 'denied'"
+                        class="mb-4 p-3 bg-amber-50 border border-amber-200 rounded-2xl flex items-center gap-3">
+                        <i class="fas fa-triangle-exclamation text-amber-500"></i>
+                        <p class="text-xs font-bold text-amber-700">Location denied. Type your city name above (e.g.
+                            "Kochi") and press Enter to find hospitals.</p>
+                    </div>
+                    <div x-show="locationStatus === 'idle'"
+                        class="mb-4 p-3 bg-blue-50 border border-blue-100 rounded-2xl flex items-center gap-3">
+                        <i class="fas fa-info-circle text-blue-500"></i>
+                        <p class="text-xs font-bold text-blue-700">Click <strong>Use GPS</strong> to find hospitals near
+                            you, or type your city name above.</p>
+                    </div>
+                    <div x-show="locationStatus === 'granted'"
+                        class="mb-4 p-3 bg-teal-50 border border-teal-100 rounded-2xl flex items-center gap-3">
+                        <i class="fas fa-circle-check text-teal-500"></i>
+                        <p class="text-xs font-bold text-teal-700">Showing hospitals within <strong>15km</strong> of
+                            your GPS location.</p>
+                    </div>
                     <div class="space-y-6">
                         <template x-for="hosp in hospitals" :key="hosp.id">
                             <div class="p-6 border border-slate-100 rounded-3xl bg-slate-50/50">
@@ -164,58 +205,150 @@
                                     <div>
                                         <h4 class="font-black text-slate-800 text-lg" x-text="hosp.name"></h4>
                                         <p class="text-xs text-slate-400 font-bold uppercase tracking-tighter"
-                                            x-text="'Hosp: ' + hosp.phone"></p>
+                                            x-text="hosp.address || ''"></p>
                                     </div>
-                                    <a :href="'https://www.google.com/maps/search/' + encodeURIComponent(hosp.name)"
-                                        target="_blank"
-                                        class="px-4 py-2 bg-teal-600 text-white rounded-xl text-[10px] font-black uppercase tracking-widest shadow-md hover:bg-teal-700 transition-all">
-                                        <i class="fas fa-location-dot mr-1"></i> Maps
-                                    </a>
+                                    <template x-if="hosp.latitude && hosp.longitude">
+                                        <a :href="'https://www.google.com/maps?q=' + hosp.latitude + ',' + hosp.longitude"
+                                            target="_blank"
+                                            class="px-4 py-2 bg-teal-600 text-white rounded-xl text-[10px] font-black uppercase tracking-widest shadow-md hover:bg-teal-700 transition-all">
+                                            <i class="fas fa-location-dot mr-1"></i> Maps (<span
+                                                x-text="hosp.distance + ' km'"></span>)
+                                        </a>
+                                    </template>
+                                    <template x-if="!hosp.latitude || !hosp.longitude">
+                                        <a :href="'https://www.google.com/maps/search/' + encodeURIComponent(hosp.name)"
+                                            target="_blank"
+                                            class="px-4 py-2 bg-slate-400 text-white rounded-xl text-[10px] font-black uppercase tracking-widest shadow-md hover:bg-slate-500 transition-all">
+                                            <i class="fas fa-search-location mr-1"></i> Search Maps
+                                        </a>
+                                    </template>
                                 </div>
 
                                 <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
                                     <div
                                         class="p-4 bg-white rounded-2xl shadow-sm border border-slate-100 flex items-center justify-between">
                                         <div>
-                                            <p class="text-[9px] font-black text-slate-400 uppercase">Ambulance Desk</p>
-                                            <p class="text-xs font-bold text-slate-800" x-text="hosp.ambulance_no"></p>
+                                            <p class="text-[9px] font-black text-slate-400 uppercase">📞 Reception</p>
+                                            <p class="text-xs font-bold text-slate-800" x-text="hosp.phone"></p>
                                         </div>
-                                        <a :href="'tel:' + hosp.ambulance_no"
-                                            class="w-8 h-8 flex items-center justify-center bg-red-50 text-red-600 rounded-lg"><i
+                                        <a :href="'tel:' + hosp.phone"
+                                            class="w-8 h-8 flex items-center justify-center bg-blue-50 text-blue-600 rounded-lg"><i
                                                 class="fas fa-phone"></i></a>
                                     </div>
                                     <div
-                                        class="p-4 bg-white rounded-2xl shadow-sm border border-slate-100 flex items-center justify-between">
+                                        class="p-4 bg-white rounded-2xl shadow-sm border border-red-100 flex items-center justify-between">
                                         <div>
-                                            <p class="text-[9px] font-black text-slate-400 uppercase"
-                                                x-text="'Driver: ' + hosp.driver_name"></p>
+                                            <p class="text-[9px] font-black text-red-400 uppercase">🚑 Emergency /
+                                                Ambulance</p>
                                             <p class="text-xs font-bold text-slate-800" x-text="hosp.driver_no"></p>
                                         </div>
                                         <a :href="'tel:' + hosp.driver_no"
-                                            class="w-8 h-8 flex items-center justify-center bg-slate-100 text-slate-600 rounded-lg"><i
-                                                class="fas fa-phone"></i></a>
+                                            class="w-8 h-8 flex items-center justify-center bg-red-50 text-red-600 rounded-lg"><i
+                                                class="fas fa-ambulance"></i></a>
                                     </div>
                                 </div>
                             </div>
                         </template>
+                        <!-- Empty state -->
+                        <div x-show="hospitals.length === 0 && locationStatus !== 'idle'" class="text-center py-10">
+                            <i class="fas fa-hospital-slash text-3xl text-slate-200 mb-3 block"></i>
+                            <p class="text-sm font-bold text-slate-400">No hospitals found within 15km of this location.
+                            </p>
+                            <p class="text-xs text-slate-400 mt-1">Try searching for a nearby area or city name.</p>
+                        </div>
                     </div>
                 </div>
             </div>
 
-            <div class="space-y-8">
-                <div class="teal-gradient rounded-[2.5rem] p-10 shadow-xl text-white">
-                    <h3 class="text-xl font-black mb-4">Network Safety</h3>
-                    <p class="text-sm font-medium opacity-80 mb-6 leading-relaxed">Connecting you to verified hospitals
-                        and ambulances within your radius.</p>
+            <div class="space-y-6">
+                <!-- Network Safety Card -->
+                <div class="teal-gradient rounded-[2.5rem] p-8 shadow-xl text-white relative overflow-hidden">
+                    <div class="absolute -right-8 -bottom-8 w-32 h-32 bg-white/5 rounded-full"></div>
+                    <div class="absolute -right-2 -top-2 w-16 h-16 bg-white/5 rounded-full"></div>
+                    <div class="flex items-center gap-3 mb-4">
+                        <div class="w-10 h-10 bg-white/20 rounded-xl flex items-center justify-center">
+                            <i class="fas fa-shield-heart text-white"></i>
+                        </div>
+                        <h3 class="text-lg font-black">Network Safety</h3>
+                    </div>
+                    <p class="text-sm font-medium opacity-80 mb-5 leading-relaxed">Verified hospitals &amp; ambulances
+                        within your radius.</p>
                     <div class="space-y-3 pt-4 border-t border-white/20">
-                        <div class="flex justify-between text-xs font-bold uppercase tracking-widest">
-                            <span>Nearby Hospitals</span>
-                            <span x-text="hospitals.length"></span>
+                        <div class="flex justify-between items-center">
+                            <span class="text-xs font-bold uppercase tracking-widest opacity-70">Nearby Hospitals</span>
+                            <span class="text-xl font-black" x-text="hospitals.length"></span>
                         </div>
-                        <div class="flex justify-between text-xs font-bold uppercase tracking-widest">
-                            <span>Active Radius</span>
-                            <span>15 km</span>
+                        <div class="flex justify-between items-center">
+                            <span class="text-xs font-bold uppercase tracking-widest opacity-70">Active Radius</span>
+                            <span class="text-sm font-black">15 km</span>
                         </div>
+                        <div class="flex justify-between items-center">
+                            <span class="text-xs font-bold uppercase tracking-widest opacity-70">GPS Status</span>
+                            <span class="text-xs font-black px-2 py-1 rounded-full"
+                                :class="locationStatus === 'granted' ? 'bg-white/20' : 'bg-white/10 opacity-60'"
+                                x-text="locationStatus === 'granted' ? 'Active' : locationStatus === 'denied' ? 'Off' : 'Standby'"></span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Quick Stats -->
+                <div class="bg-white rounded-[2rem] p-6 shadow-sm border border-slate-100">
+                    <h4 class="text-xs font-black text-slate-400 uppercase tracking-widest mb-4">Quick Actions</h4>
+                    <div class="space-y-2">
+                        <button @click="getUserLocation()"
+                            class="w-full flex items-center gap-3 p-3 bg-teal-50 hover:bg-teal-100 rounded-xl transition-all text-left">
+                            <div class="w-8 h-8 bg-teal-500 rounded-lg flex items-center justify-center flex-shrink-0">
+                                <i class="fas fa-location-crosshairs text-white text-xs"></i>
+                            </div>
+                            <div>
+                                <p class="text-xs font-black text-teal-700">Detect My Location</p>
+                                <p class="text-[10px] text-teal-500 font-bold">Find nearby hospitals via GPS</p>
+                            </div>
+                        </button>
+                        <a href="tel:108"
+                            class="w-full flex items-center gap-3 p-3 bg-red-50 hover:bg-red-100 rounded-xl transition-all">
+                            <div class="w-8 h-8 bg-red-500 rounded-lg flex items-center justify-center flex-shrink-0">
+                                <i class="fas fa-phone text-white text-xs"></i>
+                            </div>
+                            <div>
+                                <p class="text-xs font-black text-red-700">Call Ambulance 108</p>
+                                <p class="text-[10px] text-red-500 font-bold">National Emergency Helpline</p>
+                            </div>
+                        </a>
+                    </div>
+                </div>
+
+                <!-- My Feedback History -->
+                <div class="bg-white rounded-[2rem] p-6 shadow-sm border border-slate-100">
+                    <h3 class="text-base font-black mb-4 flex items-center gap-2 text-slate-800">
+                        <i class="fas fa-comments text-teal-600 text-sm"></i>
+                        <span>My Feedback History</span>
+                    </h3>
+                    <div class="space-y-3 max-h-[420px] overflow-y-auto pr-1" style="scrollbar-width: thin;">
+                        {% for review in user_reviews %}
+                        <div class="p-4 bg-slate-50 rounded-2xl border border-slate-100 space-y-2">
+                            <div class="flex justify-between items-center">
+                                <span
+                                    class="px-2 py-0.5 bg-teal-100 text-teal-700 text-[8px] font-black uppercase tracking-widest rounded-md">{{
+                                    review.pharmacy.shop_name if review.pharmacy else 'Pharmacy' }}</span>
+                                <span class="text-[8px] font-bold text-slate-400">{{ review.created_at.strftime('%b %d')
+                                    if review.created_at else '' }}</span>
+                            </div>
+                            <p class="text-xs text-slate-700 font-bold leading-relaxed">{{ review.comment }}</p>
+                            {% if review.pharmacy_reply %}
+                            <div class="mt-1 pl-3 border-l-2 border-teal-400 space-y-1">
+                                <p class="text-[8px] font-black text-teal-700 uppercase tracking-widest">Pharmacy Reply
+                                </p>
+                                <p class="text-[10px] text-slate-500 italic">{{ review.pharmacy_reply }}</p>
+                            </div>
+                            {% endif %}
+                        </div>
+                        {% else %}
+                        <div class="py-8 text-center text-slate-300">
+                            <i class="fas fa-comment-slash text-3xl mb-2 block"></i>
+                            <p class="text-xs font-bold uppercase tracking-widest">No feedback yet</p>
+                        </div>
+                        {% endfor %}
                     </div>
                 </div>
             </div>
@@ -253,16 +386,70 @@
                 query: '', sosMsg: '', results: [], reviewModal: false,
                 selectedPharma: {}, rating: 5, reviewText: '',
                 hospitals: [],
+                lat: null,
+                lng: null,
+                locationQuery: '',
+
+                locationStatus: 'idle',  // 'idle', 'loading', 'granted', 'denied'
 
                 async init() {
                     console.log('Terminal Ready');
-                    await this.loadNearby();
+                    // Don't auto-request location — wait for user to click GPS button
+                    // But check if browser has already pre-granted permission
+                    if (navigator.permissions) {
+                        try {
+                            const perm = await navigator.permissions.query({ name: 'geolocation' });
+                            if (perm.state === 'granted') {
+                                // Already granted before — silently use it
+                                this.getUserLocation();
+                            }
+                            // If 'prompt' or 'denied', wait for explicit button click
+                        } catch (e) { /* permissions API not supported */ }
+                    }
+                },
+
+                getUserLocation() {
+                    if (!navigator.geolocation) {
+                        this.locationStatus = 'denied';
+                        return;
+                    }
+                    this.locationStatus = 'loading';
+                    navigator.geolocation.getCurrentPosition(
+                        async (position) => {
+                            this.lat = position.coords.latitude;
+                            this.lng = position.coords.longitude;
+                            this.locationStatus = 'granted';
+                            this.locationQuery = '';
+                            await this.loadNearby();
+                        },
+                        async (error) => {
+                            console.warn('Geolocation denied/failed:', error);
+                            this.locationStatus = 'denied';
+                            // Don't auto-load all hospitals when denied
+                        },
+                        { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+                    );
                 },
 
                 async loadNearby() {
                     try {
-                        const response = await fetch('/patient/nearby_hospitals');
+                        let url = '/patient/nearby_hospitals';
+                        const params = new URLSearchParams();
+
+                        if (this.lat && this.lng) {
+                            params.append('lat', this.lat);
+                            params.append('lng', this.lng);
+                        }
+                        if (this.locationQuery) {
+                            params.append('location_query', this.locationQuery);
+                        }
+
+                        const response = await fetch(`${url}?${params.toString()}`);
                         this.hospitals = await response.json();
+
+                        // If we got results back from a manual search, update the medicince results too
+                        if (this.query.length >= 2) this.filterMeds();
+
                     } catch (e) { console.error('Hospitals load failed'); }
                 },
 
@@ -270,7 +457,18 @@
                     if (this.query.length < 2) { this.results = []; return; }
 
                     try {
-                        const response = await fetch(`/patient/search_medicine?query=${this.query}`);
+                        let url = `/patient/search_medicine?query=${this.query}`;
+                        const params = new URLSearchParams({ query: this.query });
+
+                        if (this.lat && this.lng) {
+                            params.append('lat', this.lat);
+                            params.append('lng', this.lng);
+                        }
+                        if (this.locationQuery) {
+                            params.append('location_query', this.locationQuery);
+                        }
+
+                        const response = await fetch(`/patient/search_medicine?${params.toString()}`);
                         this.results = await response.json();
                     } catch (error) {
                         console.error('Error fetching medicines:', error);

@@ -59,212 +59,325 @@
 
     <script>
         document.addEventListener('alpine:init', () => {
+            // GLOBAL MODAL STORE
+            Alpine.store('modals', {
+                addAdmin: false,
+                addHosp: false,
+                addAmb: false,
+                alert: false,
+                notif: false,
+                toggle(name) {
+                    this[name] = !this[name];
+                },
+                open(name) {
+                    this[name] = true;
+                },
+                close(name) {
+                    this[name] = false;
+                }
+            });
+
+            // MAIN ADMIN SYSTEM
             Alpine.data('adminSystem', () => ({
                 currentTab: 'overview',
-                adminName: '{{ current_user.name }}',
-                adminRole: '{{ current_user.role }}',
+                adminName: {{ (current_user.name or 'Admin') | tojson }},
+            adminRole: {{ (current_user.role or 'sub_admin') | tojson }},
 
-                // Modals
-                showAddAdminModal: false,
-                showAddHospModal: false,
-                showAddAmbModal: false,
-                showAlertModal: false,
-                targetPharma: {},
-                alertMsg: '',
-                alertType: 'info',
-                scanning: false,
-                scanResults: [],
+            // Search & Filter
+            search: '',
+            medicineSearch: '',
+            pharmacyFilterSnippet: '',
+            selectedHosp: '',
+            showNotif: false,
 
-                // Search & Filter
-                search: '',
-                medicineSearch: '',
-                pharmacyFilterSnippet: '',
+            // Current Action Targets
+            targetPharma: {},
+            alertMsg: '',
+            alertType: 'info',
+            scanning: false,
+            scanResults: [],
 
-                // DATA INJECTION
-                pharmacies: {{ pharmacies_json | safe }},
-                subAdmins: {{ sub_admins_json | safe }},
-                hospitals: {{ hospitals_json | safe }},
-                medicines: {{ medicines_json | safe }},
-                ambulances: {{ ambulances_json | safe }},
-                recentSOS: {{ emergencies_json | safe }},
+            // DATA INJECTION (Server Side)
+            pharmacies: {{ pharmacies_json | safe if pharmacies_json else '[]' }},
+        subAdmins: {{ sub_admins_json | safe if sub_admins_json else '[]' }},
+        hospitals: {{ hospitals_json | safe if hospitals_json else '[]' }},
+        medicines: {{ medicines_json | safe if medicines_json else '[]' }},
+        ambulances: {{ ambulances_json | safe if ambulances_json else '[]' }},
+        recentSOS: {{ emergencies_json | safe if emergencies_json else '[]' }},
+        archivedHospitals: {{ archived_hospitals_json | safe if archived_hospitals_json else '[]' }},
+        archivedAmbulances: {{ archived_ambulances_json | safe if archived_ambulances_json else '[]' }},
 
-                stats: {
-                    pharmacies: {{ pharmacies_count }},
-                    hospitals: {{ hospitals_count }},
-                    medicines: {{ medicines_count }},
-                    ambulances: {{ ambulances_count }}
-                },
+        stats: {
+            pharmacies: {{ pharmacies_count or 0 }},
+            hospitals: {{ hospitals_count or 0 }},
+            medicines: {{ medicines_count or 0 }},
+            ambulances: {{ ambulances_count or 0 }}
+        },
 
-                tabs: [
-                    { id: 'overview', name: 'Control Center', icon: 'fas fa-grid-2' },
-                    { id: 'pharmacies', name: 'Pharmacy Network', icon: 'fas fa-store' },
-                    { id: 'medicines', name: 'Master Inventory', icon: 'fas fa-pills' },
-                    { id: 'ambulances', name: 'Rescue Fleet', icon: 'fas fa-truck-medical' },
-                    { id: 'sos', name: 'Emergency Feed', icon: 'fas fa-broadcast-tower' },
-                    { id: 'admins', name: 'Access Control', icon: 'fas fa-user-shield' },
-                    { id: 'alerts', name: 'Network Audit', icon: 'fas fa-clipboard-check' },
-                ],
+        tabs: [
+            { id: 'overview', name: 'Control Center', icon: 'fas fa-grid-2' },
+            { id: 'pharmacies', name: 'Pharmacy Network', icon: 'fas fa-store' },
+            { id: 'hospitals', name: 'Partner Hospitals', icon: 'fas fa-hospital' },
+            { id: 'medicines', name: 'Master Inventory', icon: 'fas fa-pills' },
+            { id: 'ambulances', name: 'Rescue Fleet', icon: 'fas fa-truck-medical' },
+            { id: 'sos', name: 'Emergency Feed', icon: 'fas fa-broadcast-tower' },
+            { id: 'admins', name: 'Access Control', icon: 'fas fa-user-shield' },
+            { id: 'alerts', name: 'Network Audit', icon: 'fas fa-clipboard-check' },
+            { id: 'archive', name: 'Archive Vault', icon: 'fas fa-box-archive' }
+        ],
 
-                init() {
-                    console.log('MedLink Control Center Online');
-                },
+            init() {
+            console.log('MedLink Control Center: Online');
+            console.log('Role Context:', this.adminRole);
 
-                // Getters
+            // Initialize tab from localStorage
+            const savedTab = localStorage.getItem('medlinkAdminTab');
+            if (savedTab) {
+                this.currentTab = savedTab;
+            }
+
+            // Watch for tab changes and save to localStorage
+            this.$watch('currentTab', value => {
+                localStorage.setItem('medlinkAdminTab', value);
+            });
+        },
+
+                // GETTERS (Calculated State)
                 get pendingCount() {
-                    return this.pharmacies.filter(p => !p.verified).length;
-                },
+            return (this.pharmacies || []).filter(p => !p.verified).length;
+        },
 
                 get expiringCount() {
-                    return this.medicines.filter(m => this.isNearExpiry(m.expiry)).length;
-                },
+            return (this.medicines || []).filter(m => this.isNearExpiry(m.expiry)).length;
+        },
 
                 get filteredPharmacies() {
-                    if (!this.search) return this.pharmacies;
-                    const q = this.search.toLowerCase();
-                    return this.pharmacies.filter(p =>
-                        p.shop_name.toLowerCase().includes(q) ||
-                        (p.dl_no && p.dl_no.toLowerCase().includes(q))
-                    );
-                },
+            const list = this.pharmacies || [];
+            if (!this.search) return list;
+            const q = this.search.toLowerCase();
+            return list.filter(p =>
+                (p.shop_name || '').toLowerCase().includes(q) ||
+                (p.dl_no || '').toLowerCase().includes(q)
+            );
+        },
 
                 get filteredMedicines() {
-                    let list = this.medicines;
-                    if (this.pharmacyFilterSnippet) {
-                        list = list.filter(m => m.pharmacy_name === this.pharmacyFilterSnippet);
-                    }
-                    if (this.medicineSearch) {
-                        const q = this.medicineSearch.toLowerCase();
-                        list = list.filter(m =>
-                            m.name.toLowerCase().includes(q) ||
-                            m.pharmacy_name.toLowerCase().includes(q)
-                        );
-                    }
-                    return list;
-                },
+            let list = this.medicines || [];
+            if (this.pharmacyFilterSnippet) {
+                list = list.filter(m => m.pharmacy_name === this.pharmacyFilterSnippet);
+            }
+            if (this.medicineSearch) {
+                const q = this.medicineSearch.toLowerCase();
+                list = list.filter(m =>
+                    (m.name || '').toLowerCase().includes(q) ||
+                    (m.pharmacy_name && m.pharmacy_name.toLowerCase().includes(q))
+                );
+            }
+            return list;
+        },
 
                 get filteredSOS() {
-                    return this.recentSOS;
-                },
+            return this.recentSOS || [];
+        },
 
-                // Core Methods
-                isNearExpiry(date) {
-                    const d = new Date(date);
-                    const today = new Date();
-                    const diff = (d - today) / (1000 * 60 * 60 * 24);
-                    return diff < 30;
-                },
+        // UTILITIES
+        isNearExpiry(date) {
+            if (!date) return false;
+            const d = new Date(date);
+            const today = new Date();
+            const diff = (d - today) / (1000 * 60 * 60 * 24);
+            return diff < 30;
+        },
 
-                viewPharmacyStock(name) {
-                    this.pharmacyFilterSnippet = name;
-                    this.medicineSearch = '';
-                    this.currentTab = 'medicines';
-                },
+        viewPharmacyStock(name) {
+            this.pharmacyFilterSnippet = name;
+            this.medicineSearch = '';
+            this.currentTab = 'medicines';
+        },
 
-                // Action API Calls
+        openMap(lat, lng) {
+            if (lat && lng) {
+                window.open(`https://www.google.com/maps?q=${lat},${lng}`, '_blank');
+            } else {
+                alert('Location data not available.');
+            }
+        },
+
+                // ACTION METHODS (API Requests)
                 async verifyPharma(id) {
-                    const res = await fetch(`/admin/verify_pharmacy/${id}`);
-                    if (res.ok) location.reload();
-                },
+            try {
+                const res = await fetch(`/admin/verify_pharmacy/${id}`);
+                if (res.ok) location.reload();
+            } catch (e) { console.error(e); }
+        },
 
                 async deletePharma(id) {
-                    if (confirm('Permanently remove this pharmacy?')) {
-                        const res = await fetch(`/admin/reject_pharmacy/${id}`);
-                        if (res.ok) location.reload();
-                    }
-                },
+            if (confirm('Permanently remove this pharmacy?')) {
+                try {
+                    const res = await fetch(`/admin/reject_pharmacy/${id}`);
+                    if (res.ok) location.reload();
+                } catch (e) { console.error(e); }
+            }
+        },
 
                 async deleteMedicine(id) {
-                    if (confirm('Remove this medicine from system?')) {
-                        const res = await fetch(`/admin/delete_medicine/${id}`);
-                        if (res.ok) location.reload();
-                    }
-                },
+            if (confirm('Remove this medicine?')) {
+                try {
+                    const res = await fetch(`/admin/delete_medicine/${id}`);
+                    if (res.ok) location.reload();
+                } catch (e) { console.error(e); }
+            }
+        },
 
                 async deleteAmbulance(id) {
-                    if (confirm('Decommission this unit?')) {
-                        const res = await fetch(`/admin/delete_ambulance/${id}`);
-                        if (res.ok) location.reload();
-                    }
-                },
+            console.log('Archiving ambulance:', id);
+            if (confirm('Archive this unit? It will be moved to the archive vault.')) {
+                try {
+                    const res = await fetch(`/admin/delete_ambulance/${id}`);
+                    if (res.ok) location.reload();
+                    else console.error('Archive failed', res.status);
+                } catch (e) { console.error(e); }
+            }
+        },
+
+                async restoreAmbulance(id) {
+            console.log('Restoring ambulance:', id);
+            try {
+                const res = await fetch(`/admin/restore_ambulance/${id}`);
+                if (res.ok) location.reload();
+            } catch (e) { console.error(e); }
+        },
+
+                async deleteHospital(id) {
+            console.log('Archiving hospital:', id);
+            if (confirm('Archive this hospital? It can be restored from the archive vault.')) {
+                try {
+                    const res = await fetch(`/admin/delete_hospital/${id}`);
+                    if (res.ok) location.reload();
+                    else console.error('Archive failed', res.status);
+                } catch (e) { console.error(e); }
+            }
+        },
+
+                async restoreHospital(id) {
+            console.log('Restoring hospital:', id);
+            try {
+                const res = await fetch(`/admin/restore_hospital/${id}`);
+                if (res.ok) location.reload();
+            } catch (e) { console.error(e); }
+        },
 
                 async deleteAdmin(id) {
-                    if (confirm('Revoke access for this sub-admin?')) {
-                        const res = await fetch(`/admin/remove_sub_admin/${id}`);
-                        if (res.ok) location.reload();
-                    }
-                },
+            if (confirm('Revoke access for this sub-admin?')) {
+                try {
+                    const res = await fetch(`/admin/remove_sub_admin/${id}`);
+                    if (res.ok) location.reload();
+                } catch (e) { console.error(e); }
+            }
+        },
 
-                async resolveSOS(id) {
-                    const res = await fetch(`/admin/resolve_broadcast/${id}`, {
+                async toggleSuspendAdmin(id) {
+            if (confirm('Change suspension status?')) {
+                try {
+                    const res = await fetch(`/admin/toggle_user_suspend/${id}`, {
                         method: 'POST',
                         headers: { 'X-CSRFToken': '{{ csrf_token() }}' }
                     });
                     if (res.ok) location.reload();
-                },
+                } catch (e) { console.error(e); }
+            }
+        },
 
-                // Messaging System
-                openAlertModal(pharma) {
-                    this.targetPharma = pharma;
-                    this.alertMsg = '';
-                    this.showAlertModal = true;
-                },
+                async toggleSuspendPharmacy(id) {
+            if (confirm('Change suspension status?')) {
+                try {
+                    const res = await fetch(`/admin/toggle_pharmacy_suspend/${id}`, {
+                        method: 'POST',
+                        headers: { 'X-CSRFToken': '{{ csrf_token() }}' }
+                    });
+                    if (res.ok) location.reload();
+                } catch (e) { console.error(e); }
+            }
+        },
+
+                async resolveSOS(id) {
+            try {
+                const res = await fetch(`/admin/resolve_broadcast/${id}`, {
+                    method: 'POST',
+                    headers: { 'X-CSRFToken': '{{ csrf_token() }}' }
+                });
+                if (res.ok) location.reload();
+            } catch (e) { console.error(e); }
+        },
+
+        openAlertModal(pharma) {
+            this.targetPharma = pharma || {};
+            this.alertMsg = '';
+            Alpine.store('modals').open('alert');
+        },
 
                 async submitAlert() {
-                    const res = await fetch('/admin/send_alert', {
+            if (!this.targetPharma.id) return;
+            try {
+                const res = await fetch('/admin/send_custom_alert', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRFToken': '{{ csrf_token() }}'
+                    },
+                    body: JSON.stringify({
+                        pharmacy_id: this.targetPharma.id,
+                        message: this.alertMsg,
+                        type: this.alertType
+                    })
+                });
+                if (res.ok) {
+                    Alpine.store('modals').close('alert');
+                    alert('Alert sent successfully.');
+                }
+            } catch (e) { console.error(e); }
+        },
+
+                async scanAndAlert() {
+            this.scanning = true;
+            this.scanResults = [];
+            try {
+                const res = await fetch('/admin/scan_expiring_stock');
+                if (res.ok) {
+                    this.scanResults = await res.json();
+                }
+            } catch (e) { console.error(e); }
+
+            for (const m of this.scanResults) {
+                try {
+                    await fetch('/admin/send_custom_alert', {
                         method: 'POST',
-                        headers: { 'Content-Type': 'application/json', 'X-CSRFToken': '{{ csrf_token() }}' },
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'X-CSRFToken': '{{ csrf_token() }}'
+                        },
                         body: JSON.stringify({
-                            pharmacy_id: this.targetPharma.id,
-                            message: this.alertMsg,
-                            type: this.alertType
+                            pharmacy_id: m.pharmacy_id,
+                            message: `URGENT: ${m.name} is expiring soon (${m.expiry}).`,
+                            type: 'danger'
                         })
                     });
-                    if (res.ok) {
-                        this.showAlertModal = false;
-                        alert('Alert pushed to pharmacy terminal.');
-                    }
-                },
-
-                // Global Scan
-                async scanAndAlert() {
-                    this.scanning = true;
-                    this.scanResults = [];
-
-                    const nearExpiry = this.medicines.filter(m => this.isNearExpiry(m.expiry));
-
-                    for (const m of nearExpiry) {
-                        this.scanResults.push({
-                            med: m.name,
-                            pharma: m.pharmacy_name,
-                            pharma_id: m.pharmacy_id,
-                            expiry: m.expiry
-                        });
-
-                        // Send auto-alert
-                        await fetch('/admin/send_alert', {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json', 'X-CSRFToken': '{{ csrf_token() }}' },
-                            body: JSON.stringify({
-                                pharmacy_id: m.pharmacy_id,
-                                message: `CRITICAL: Item "${m.name}" is expiring on ${m.expiry}. Please audit stock.`,
-                                type: 'danger'
-                            })
-                        });
-                    }
-
-                    this.scanning = false;
-                    alert('Scan complete. Expiry notifications broadcasted.');
-                }
+                } catch (e) { console.error(e); }
+            }
+            this.scanning = false;
+            alert('Broadcast complete.');
+        }
             }));
         });
     </script>
+
 </head>
 
-<body x-data="adminSystem" x-init="init" class="min-h-screen flex overflow-hidden">
+<body x-data="adminSystem" class="h-screen flex overflow-hidden">
 
     <!-- Sidebar -->
-    <aside class="w-80 glass border-r bg-white flex flex-col z-50">
-        <div class="p-8">
+    <aside class="w-80 glass border-r bg-white flex flex-col h-full z-50">
+        <div class="p-8 flex-1 overflow-y-auto custom-scrollbar">
             <div class="flex items-center gap-3 mb-12">
                 <div
                     class="w-12 h-12 bg-sky-500 rounded-2xl flex items-center justify-center shadow-lg shadow-sky-500/20">
@@ -292,10 +405,10 @@
             <div class="bg-slate-50 rounded-3xl p-6 border border-slate-200">
                 <div class="flex items-center gap-3 mb-4">
                     <div class="w-10 h-10 rounded-full bg-white border border-slate-200 flex items-center justify-center font-bold text-sky-500 shadow-sm"
-                        x-text="adminName ? adminName[0] : 'A'"></div>
+                        x-text="(adminName && adminName.length > 0) ? adminName[0] : 'A'"></div>
                     <div>
-                        <p class="text-xs font-black truncate text-slate-900" x-text="adminName"></p>
-                        <p class="text-[9px] font-bold text-slate-400 uppercase" x-text="adminRole"></p>
+                        <p class="text-xs font-black truncate text-slate-900" x-text="adminName || 'Admin User'"></p>
+                        <p class="text-[9px] font-bold text-slate-400 uppercase" x-text="adminRole || 'Sub-Admin'"></p>
                     </div>
                 </div>
                 <a href="/logout"
@@ -313,7 +426,7 @@
         <header
             class="sticky top-0 z-40 bg-white/80 backdrop-blur-md border-b border-slate-200 px-12 py-6 flex justify-between items-center shadow-sm">
             <h2 class="text-3xl font-black tracking-tight text-slate-900"
-                x-text="tabs.find(t => t.id === currentTab).name"></h2>
+                x-text="tabs.find(t => t.id === currentTab)?.name || ''"></h2>
 
             <div class="flex items-center gap-6">
                 <div class="flex items-center gap-8 pr-8 border-r border-slate-200">
@@ -326,13 +439,62 @@
                     </div>
                 </div>
                 <div class="relative">
-                    <button
-                        class="w-12 h-12 rounded-xl bg-white border border-slate-200 flex items-center justify-center text-slate-400 hover:text-sky-500 hover:border-sky-200 transition-all shadow-sm">
+                    <button id="notif-toggle" @click="$store.modals.toggle('notif')"
+                        class="w-12 h-12 rounded-xl bg-white border border-slate-200 flex items-center justify-center text-slate-400 hover:text-sky-500 hover:border-sky-200 transition-all shadow-sm relative">
                         <i class="fas fa-bell"></i>
                         <span x-show="pendingCount > 0"
                             class="absolute -top-1 -right-1 w-5 h-5 bg-red-500 text-white rounded-full text-[10px] flex items-center justify-center font-black animate-bounce shadow-lg shadow-red-200"
                             x-text="pendingCount"></span>
                     </button>
+                    <!-- Notification Dropdown -->
+                    <div x-show="showNotif" @click.away="showNotif = false"
+                        x-transition:enter="transition ease-out duration-200"
+                        x-transition:enter-start="opacity-0 translate-y-2"
+                        x-transition:enter-end="opacity-100 translate-y-0"
+                        class="absolute right-0 top-14 w-80 bg-white rounded-3xl shadow-2xl border border-slate-100 z-50 overflow-hidden">
+                        <div class="p-6 border-b border-slate-100">
+                            <p class="text-xs font-black text-slate-900 uppercase tracking-widest">Notifications</p>
+                        </div>
+                        <div class="max-h-80 overflow-y-auto">
+                            <template
+                                x-if="pendingCount === 0 && (recentSOS || []).filter(s => s.status === 'open').length === 0">
+                                <p class="text-xs text-slate-400 font-bold p-6 text-center">All clear — no pending
+                                    acciones.</p>
+                            </template>
+                            <template x-for="p in pharmacies.filter(ph => !ph.verified)" :key="p.id">
+                                <div class="px-6 py-4 hover:bg-slate-50 border-b border-slate-50 cursor-pointer"
+                                    @click="currentTab='pharmacies'; showNotif=false">
+                                    <div class="flex items-center gap-3">
+                                        <div
+                                            class="w-8 h-8 rounded-xl bg-amber-100 text-amber-600 flex items-center justify-center text-xs">
+                                            <i class="fas fa-store"></i>
+                                        </div>
+                                        <div>
+                                            <p class="text-xs font-black text-slate-800" x-text="p.shop_name"></p>
+                                            <p class="text-[10px] text-amber-600 font-bold uppercase tracking-widest">
+                                                Awaiting Verification</p>
+                                        </div>
+                                    </div>
+                                </div>
+                            </template>
+                            <template x-for="s in recentSOS.filter(s => s.status === 'open')" :key="s.id">
+                                <div class="px-6 py-4 hover:bg-slate-50 cursor-pointer"
+                                    @click="currentTab='sos'; showNotif=false">
+                                    <div class="flex items-center gap-3">
+                                        <div
+                                            class="w-8 h-8 rounded-xl bg-red-100 text-red-600 flex items-center justify-center text-xs">
+                                            <i class="fas fa-heart-pulse"></i>
+                                        </div>
+                                        <div>
+                                            <p class="text-xs font-black text-slate-800" x-text="s.medicine_name"></p>
+                                            <p class="text-[10px] text-red-600 font-bold uppercase tracking-widest">Open
+                                                SOS • <span x-text="s.patient_name"></span></p>
+                                        </div>
+                                    </div>
+                                </div>
+                            </template>
+                        </div>
+                    </div>
                 </div>
             </div>
         </header>
@@ -388,8 +550,8 @@
                         </div>
                         <div class="space-y-4">
                             <template x-for="s in recentSOS" :key="s.id">
-                                <div
-                                    class="p-5 bg-slate-50 rounded-2xl border border-slate-200 flex justify-between items-center hover:bg-white hover:shadow-md transition-all group">
+                                <div @click="currentTab = 'sos'"
+                                    class="p-5 bg-slate-50 rounded-2xl border border-slate-200 flex justify-between items-center hover:bg-white hover:shadow-md transition-all group cursor-pointer">
                                     <div class="flex items-center gap-4">
                                         <div :class="s.status === 'open' ? 'bg-red-100 text-red-600' : 'bg-emerald-100 text-emerald-600'"
                                             class="w-12 h-12 rounded-xl flex items-center justify-center transition-colors">
@@ -428,15 +590,17 @@
                             <h4 class="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-6">Quick
                                 Actions</h4>
                             <div class="space-y-3">
-                                <button @click="showAddAdminModal = true"
-                                    class="w-full p-4 bg-slate-50 hover:bg-white hover:shadow-md border border-slate-100 rounded-2xl flex items-center gap-4 text-[10px] font-black uppercase tracking-widest text-slate-600 hover:text-sky-600 transition-all">
-                                    <div
-                                        class="w-8 h-8 rounded-lg bg-sky-100 text-sky-600 flex items-center justify-center">
-                                        <i class="fas fa-user-plus"></i>
-                                    </div>
-                                    Register Sub-Admin
-                                </button>
-                                <button @click="showAddHospModal = true"
+                                <template x-if="adminRole === 'admin'">
+                                    <button @click="$store.modals.open('addAdmin')"
+                                        class="w-full p-4 bg-slate-50 hover:bg-white hover:shadow-md border border-slate-100 rounded-2xl flex items-center gap-4 text-[10px] font-black uppercase tracking-widest text-slate-600 hover:text-sky-600 transition-all">
+                                        <div
+                                            class="w-8 h-8 rounded-lg bg-sky-100 text-sky-600 flex items-center justify-center">
+                                            <i class="fas fa-user-plus"></i>
+                                        </div>
+                                        Register Sub-Admin
+                                    </button>
+                                </template>
+                                <button @click="$store.modals.open('addHosp')"
                                     class="w-full p-4 bg-slate-50 hover:bg-white hover:shadow-md border border-slate-100 rounded-2xl flex items-center gap-4 text-[10px] font-black uppercase tracking-widest text-slate-600 hover:text-emerald-600 transition-all">
                                     <div
                                         class="w-8 h-8 rounded-lg bg-emerald-100 text-emerald-600 flex items-center justify-center">
@@ -444,7 +608,7 @@
                                     </div>
                                     Integrate Hospital
                                 </button>
-                                <button @click="showAddAmbModal = true"
+                                <button @click="$store.modals.open('addAmb')"
                                     class="w-full p-4 bg-slate-50 hover:bg-white hover:shadow-md border border-slate-100 rounded-2xl flex items-center gap-4 text-[10px] font-black uppercase tracking-widest text-slate-600 hover:text-red-600 transition-all">
                                     <div
                                         class="w-8 h-8 rounded-lg bg-red-100 text-red-600 flex items-center justify-center">
@@ -455,6 +619,60 @@
                             </div>
                         </div>
                     </div>
+                </div>
+            </div>
+
+            <!-- HOSPITALS TAB -->
+            <div x-show="currentTab === 'hospitals'"
+                class="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
+                <div class="flex justify-between items-center mb-8">
+                    <div>
+                        <p class="text-[10px] text-slate-400 font-black uppercase tracking-widest mb-1">Network
+                            Management
+                        </p>
+                        <h4 class="text-2xl font-black text-slate-900">Partner Hospitals</h4>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                    <template x-for="h in hospitals" :key="h.id">
+                        <div
+                            class="bg-white p-8 rounded-[3rem] shadow-sm border border-slate-100 hover:shadow-xl hover:-translate-y-1 transition-all group relative overflow-hidden">
+                            <div
+                                class="absolute -right-4 -top-4 w-24 h-24 bg-emerald-500/5 rounded-full blur-2xl group-hover:bg-emerald-500/10 transition-all pointer-events-none">
+                            </div>
+
+                            <div class="flex justify-between items-start mb-6">
+                                <div
+                                    class="w-14 h-14 bg-emerald-50 rounded-2xl flex items-center justify-center text-emerald-600">
+                                    <i class="fas fa-hospital text-2xl"></i>
+                                </div>
+                                <button @click="deleteHospital(h.id)"
+                                    class="relative z-10 w-10 h-10 rounded-xl bg-slate-50 text-slate-400 hover:bg-red-50 hover:text-red-600 flex items-center justify-center transition-all">
+                                    <i class="fas fa-trash-can text-sm"></i>
+                                </button>
+                            </div>
+
+                            <h5 class="text-lg font-black text-slate-900 mb-2" x-text="h.name"></h5>
+                            <div class="space-y-3 mb-8">
+                                <div class="flex items-center gap-3 text-xs font-bold text-slate-500">
+                                    <i class="fas fa-location-dot text-emerald-500 w-4"></i>
+                                    <span x-text="h.address || 'Address not listed'"></span>
+                                </div>
+                                <div class="flex items-center gap-3 text-xs font-bold text-slate-500">
+                                    <i class="fas fa-phone text-emerald-500 w-4"></i>
+                                    <span x-text="h.phone"></span>
+                                </div>
+                            </div>
+
+                            <div class="flex gap-3">
+                                <button @click="openMap(h.latitude, h.longitude)"
+                                    class="flex-1 py-3 bg-slate-900 text-white rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-slate-800 transition-all">
+                                    View on Map
+                                </button>
+                            </div>
+                        </div>
+                    </template>
                 </div>
             </div>
 
@@ -475,7 +693,7 @@
                     </div>
                 </div>
 
-                <div class="bg-white rounded-[3rem] overflow-hidden shadow-sm border border-slate-100">
+                <div class="bg-white rounded-[3rem] overflow-x-auto shadow-sm border border-slate-100 custom-scrollbar">
                     <table class="w-full text-left">
                         <thead class="bg-slate-50">
                             <tr>
@@ -533,7 +751,7 @@
                         </p>
                         <h4 class="text-2xl font-black text-slate-900">Ambulance Assets</h4>
                     </div>
-                    <button @click="showAddAmbModal = true"
+                    <button id="deploy-ambulance-btn" @click="$store.modals.open('addAmb')"
                         class="px-8 py-4 bg-red-500 text-white rounded-2xl text-[10px] font-black uppercase tracking-widest hover:bg-red-600 shadow-lg shadow-red-500/20 transition-all flex items-center gap-2">
                         <i class="fas fa-plus"></i>
                         Deploy New Ambulance
@@ -564,11 +782,11 @@
 
                             <div class="space-y-6 mb-10">
                                 <div class="flex justify-between items-center">
-                                    <span class="text-[9px] font-black text-slate-400 uppercase tracking-widest">Lead
-                                        Specialist</span>
+                                    <span class="text-[9px] font-black text-slate-400 uppercase tracking-widest">Support
+                                        Contact</span>
                                     <span
                                         class="text-sm font-black text-slate-700 px-4 py-1.5 bg-slate-50 rounded-xl border border-slate-100"
-                                        x-text="a.driver_name"></span>
+                                        x-text="a.driver_phone"></span>
                                 </div>
                                 <div class="flex justify-between items-center">
                                     <span
@@ -611,7 +829,7 @@
                     </div>
                 </div>
 
-                <div class="bg-white rounded-[3rem] overflow-hidden shadow-sm border border-slate-100">
+                <div class="bg-white rounded-[3rem] overflow-x-auto shadow-sm border border-slate-100 custom-scrollbar">
                     <table class="w-full text-left">
                         <thead class="bg-slate-50">
                             <tr>
@@ -630,7 +848,8 @@
                                     <td class="px-10 py-8">
                                         <div class="flex items-center gap-5">
                                             <div class="w-14 h-14 rounded-2xl bg-sky-50 border border-sky-100 flex items-center justify-center font-black text-xl text-sky-600 shadow-sm"
-                                                x-text="p.shop_name[0]"></div>
+                                                x-text="(p.shop_name && p.shop_name.length > 0) ? p.shop_name[0] : 'P'">
+                                            </div>
                                             <div>
                                                 <p class="font-black text-lg text-slate-900" x-text="p.shop_name"></p>
                                                 <div class="flex flex-col gap-1 mt-1">
@@ -672,6 +891,14 @@
                                                 class="w-12 h-12 bg-white border border-slate-200 rounded-xl flex items-center justify-center text-sky-600 hover:bg-sky-50 transition-all shadow-sm">
                                                 <i class="fas fa-bell"></i>
                                             </button>
+                                            <template x-if="adminRole === 'admin'">
+                                                <button @click="toggleSuspendPharmacy(p.id)"
+                                                    :class="p.is_suspended ? 'text-emerald-500 hover:bg-emerald-50' : 'text-amber-500 hover:bg-amber-50'"
+                                                    class="w-12 h-12 bg-white border border-slate-200 rounded-xl flex items-center justify-center transition-all shadow-sm"
+                                                    :title="p.is_suspended ? 'Reactivate' : 'Suspend'">
+                                                    <i class="fas" :class="p.is_suspended ? 'fa-play' : 'fa-pause'"></i>
+                                                </button>
+                                            </template>
                                             <button @click="deletePharma(p.id)"
                                                 class="w-12 h-12 bg-white border border-slate-200 rounded-xl flex items-center justify-center text-red-500 hover:bg-red-50 transition-all shadow-sm">
                                                 <i class="fas fa-trash-can"></i>
@@ -727,9 +954,13 @@
 
                             <div class="mt-8 flex gap-4">
                                 <template x-if="s.status === 'open'">
-                                    <button @click="resolveSOS(s.id)"
+                                    <button :id="'resolve-sos-' + s.id" @click="resolveSOS(s.id)"
                                         class="flex-1 py-4 bg-emerald-500 text-white rounded-2xl text-[10px] font-black uppercase tracking-widest hover:bg-emerald-600 shadow-lg shadow-emerald-500/20 transition-all">Close</button>
                                 </template>
+                                <button @click="openMap(s.latitude, s.longitude)"
+                                    class="w-16 h-16 bg-white border border-slate-200 rounded-2xl flex items-center justify-center text-xl text-sky-500 hover:bg-sky-50 transition-all shadow-sm">
+                                    <i class="fas fa-location-dot"></i>
+                                </button>
                                 <a :href="'https://wa.me/' + s.phone" target="_blank"
                                     class="w-16 h-16 bg-white border border-slate-200 rounded-2xl flex items-center justify-center text-xl text-emerald-500 hover:bg-emerald-50 transition-all shadow-sm">
                                     <i class="fab fa-whatsapp"></i>
@@ -749,9 +980,11 @@
                             Privileges</p>
                         <h4 class="text-2xl font-black text-slate-900">System Controllers</h4>
                     </div>
-                    <button @click="showAddAdminModal = true"
-                        class="px-8 py-4 bg-sky-500 text-white rounded-2xl text-[10px] font-black uppercase tracking-widest hover:bg-sky-600 shadow-lg shadow-sky-500/20 transition-all">Add
-                        Admin</button>
+                    <template x-if="adminRole === 'admin'">
+                        <button id="add-admin-btn" @click="$store.modals.open('addAdmin')"
+                            class="px-8 py-4 bg-sky-500 text-white rounded-2xl text-[10px] font-black uppercase tracking-widest hover:bg-sky-600 shadow-lg shadow-sky-500/20 transition-all">Add
+                            Admin</button>
+                    </template>
                 </div>
 
                 <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
@@ -760,14 +993,28 @@
                             class="bg-white p-8 rounded-[3rem] border border-slate-100 shadow-sm hover:shadow-md transition-all">
                             <div class="flex justify-between items-start mb-8">
                                 <div class="w-16 h-16 rounded-2xl bg-sky-50 border border-sky-100 flex items-center justify-center font-black text-2xl text-sky-600 shadow-sm"
-                                    x-text="admin.name ? admin.name[0] : 'A'"></div>
-                                <button @click="deleteAdmin(admin.id)"
-                                    class="text-slate-300 hover:text-red-500 transition-colors">
-                                    <i class="fas fa-trash-can"></i>
-                                </button>
+                                    x-text="(admin.name && admin.name.length > 0) ? admin.name[0] : 'A'"></div>
+                                <template x-if="adminRole === 'admin'">
+                                    <div class="flex gap-2">
+                                        <button @click="toggleSuspendAdmin(admin.id)"
+                                            :class="admin.is_suspended ? 'text-emerald-500' : 'text-amber-500'"
+                                            class="hover:opacity-75 transition-colors"
+                                            :title="admin.is_suspended ? 'Reactivate' : 'Suspend'">
+                                            <i class="fas" :class="admin.is_suspended ? 'fa-play' : 'fa-pause'"></i>
+                                        </button>
+                                        <button @click="deleteAdmin(admin.id)"
+                                            class="text-slate-300 hover:text-red-500 transition-colors">
+                                            <i class="fas fa-trash-can"></i>
+                                        </button>
+                                    </div>
+                                </template>
                             </div>
-                            <h5 class="text-lg font-black text-slate-900" x-text="admin.name"></h5>
-                            <p class="text-xs font-bold text-sky-600/70" x-text="admin.username"></p>
+                            <h5 class="text-lg font-black"
+                                :class="admin.is_suspended ? 'text-slate-400 line-through' : 'text-slate-900'"
+                                x-text="admin.name"></h5>
+                            <p class="text-xs font-bold"
+                                :class="admin.is_suspended ? 'text-slate-400' : 'text-sky-600/70'"
+                                x-text="admin.username"></p>
                         </div>
                     </template>
                 </div>
@@ -815,89 +1062,208 @@
                 </div>
             </div>
 
+            <!-- ARCHIVE VAULT TAB -->
+            <div x-show="currentTab === 'archive'"
+                class="space-y-12 animate-in fade-in slide-in-from-bottom-4 duration-500">
+                <div class="flex justify-between items-center mb-8">
+                    <div>
+                        <p class="text-[10px] text-slate-400 font-black uppercase tracking-widest mb-1">Compliance &
+                            Retention</p>
+                        <h4 class="text-2xl font-black text-slate-900">Archive Vault</h4>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                    <!-- Archived Hospitals -->
+                    <div class="bg-white p-10 rounded-[3rem] shadow-sm border border-slate-100">
+                        <h5 class="text-base font-black text-slate-900 mb-6 flex items-center gap-3">
+                            <i class="fas fa-hospital text-slate-400"></i>
+                            Archived Hospitals
+                            <span class="ml-auto px-3 py-1 bg-slate-100 text-slate-500 text-[10px] rounded-full"
+                                x-text="archivedHospitals.length"></span>
+                        </h5>
+                        <div class="space-y-4 max-h-[600px] overflow-y-auto pr-2 custom-scrollbar">
+                            <template x-for="h in archivedHospitals" :key="h.id">
+                                <div
+                                    class="p-6 bg-slate-50 rounded-2xl border border-slate-200 flex justify-between items-center group">
+                                    <div>
+                                        <p class="font-black text-sm text-slate-900" x-text="h.name"></p>
+                                        <p class="text-[10px] text-slate-400 font-bold uppercase mt-1"
+                                            x-text="'Archived on: ' + (h.archived_at || 'Unknown')"></p>
+                                    </div>
+                                    <button @click="restoreHospital(h.id)"
+                                        class="px-4 py-2 bg-white border border-slate-200 rounded-xl text-[10px] font-black uppercase tracking-widest text-emerald-600 hover:bg-emerald-500 hover:text-white hover:border-emerald-500 transition-all shadow-sm">
+                                        Restore
+                                    </button>
+                                </div>
+                            </template>
+                            <template x-if="archivedHospitals.length === 0">
+                                <div class="py-12 text-center text-slate-300">
+                                    <i class="fas fa-box-open text-3xl mb-3 block"></i>
+                                    <p class="text-[10px] font-black uppercase tracking-widest">No archived hospitals
+                                    </p>
+                                </div>
+                            </template>
+                        </div>
+                    </div>
+
+                    <!-- Archived Ambulances -->
+                    <div class="bg-white p-10 rounded-[3rem] shadow-sm border border-slate-100">
+                        <h5 class="text-base font-black text-slate-900 mb-6 flex items-center gap-3">
+                            <i class="fas fa-truck-medical text-slate-400"></i>
+                            Archived Ambulances
+                            <span class="ml-auto px-3 py-1 bg-slate-100 text-slate-500 text-[10px] rounded-full"
+                                x-text="archivedAmbulances.length"></span>
+                        </h5>
+                        <div class="space-y-4 max-h-[600px] overflow-y-auto pr-2 custom-scrollbar">
+                            <template x-for="a in archivedAmbulances" :key="a.id">
+                                <div
+                                    class="p-6 bg-slate-50 rounded-2xl border border-slate-200 flex justify-between items-center group">
+                                    <div>
+                                        <p class="font-black text-sm text-slate-900" x-text="a.vehicle_number"></p>
+                                        <p class="text-[10px] text-slate-400 font-bold uppercase mt-1"
+                                            x-text="'Archived on: ' + (a.archived_at || 'Unknown')"></p>
+                                    </div>
+                                    <button @click="restoreAmbulance(a.id)"
+                                        class="px-4 py-2 bg-white border border-slate-200 rounded-xl text-[10px] font-black uppercase tracking-widest text-emerald-600 hover:bg-emerald-500 hover:text-white hover:border-emerald-500 transition-all shadow-sm">
+                                        Restore
+                                    </button>
+                                </div>
+                            </template>
+                            <template x-if="archivedAmbulances.length === 0">
+                                <div class="py-12 text-center text-slate-300">
+                                    <i class="fas fa-box-open text-3xl mb-3 block"></i>
+                                    <p class="text-[10px] font-black uppercase tracking-widest">No archived units</p>
+                                </div>
+                            </template>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
         </div>
     </main>
 
-    <!-- Modals -->
-    <template x-if="showAddAdminModal">
-        <div class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[100] flex items-center justify-center p-6">
-            <div @click.away="showAddAdminModal = false" class="bg-white rounded-[3rem] p-12 max-w-md w-full relative">
-                <h2 class="text-2xl font-black text-slate-900 mb-8">Add Sub-Admin</h2>
-                <form action="/admin/add_sub_admin" method="POST" class="space-y-4">
-                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                    <input type="text" name="name" placeholder="Full Name" required class="w-full p-4 bg-slate-50 rounded-2xl border">
-                    <input type="email" name="username" placeholder="Email" required class="w-full p-4 bg-slate-50 rounded-2xl border">
-                    <input type="password" name="password" placeholder="Password" required class="w-full p-4 bg-slate-50 rounded-2xl border">
-                    <button type="submit" class="w-full py-4 bg-sky-500 text-white rounded-2xl font-black uppercase">Create Admin</button>
-                    <button type="button" @click="showAddAdminModal = false" class="w-full py-4 text-slate-400 font-black uppercase">Cancel</button>
-                </form>
-            </div>
+    <!-- Modals (Global Store Implementation) -->
+    <div x-show="$store.modals.addAdmin" x-cloak
+        class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[100] flex items-center justify-center p-6">
+        <div @click.away="$store.modals.close('addAdmin')"
+            class="bg-white rounded-[3rem] p-12 max-w-md w-full relative border border-slate-100 shadow-2xl max-h-[90vh] overflow-y-auto custom-scrollbar">
+            <h2 class="text-2xl font-black text-slate-900 mb-8">Add Sub-Admin</h2>
+            <form action="/admin/add_sub_admin" method="POST" class="space-y-4">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <input type="text" name="name" placeholder="Full Name" required
+                    class="w-full p-4 bg-slate-50 rounded-2xl border border-slate-200">
+                <input type="email" name="username" placeholder="Email" required
+                    class="w-full p-4 bg-slate-50 rounded-2xl border border-slate-200">
+                <input type="password" name="password" placeholder="Password" required
+                    class="w-full p-4 bg-slate-50 rounded-2xl border border-slate-200">
+                <button type="submit"
+                    class="w-full py-4 bg-sky-500 text-white rounded-2xl font-black uppercase shadow-lg shadow-sky-500/20">Create
+                    Admin</button>
+                <button type="button" @click="$store.modals.close('addAdmin')"
+                    class="w-full py-4 text-slate-400 font-black uppercase hover:text-slate-600 transition-all">Cancel</button>
+            </form>
         </div>
-    </template>
+    </div>
 
-    <template x-if="showAlertModal">
-        <div class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[100] flex items-center justify-center p-6">
-            <div @click.away="showAlertModal = false" class="bg-white rounded-[3rem] p-12 max-w-md w-full relative">
-                <h2 class="text-2xl font-black text-slate-900 mb-8">Send Alert</h2>
-                <p class="text-sm text-slate-500 mb-6 font-bold" x-text="'Target: ' + targetPharma.shop_name"></p>
-                <textarea x-model="alertMsg" class="w-full p-4 bg-slate-50 rounded-2xl border h-32 mb-6" placeholder="Message..."></textarea>
-                <div class="flex gap-2 mb-6">
-                    <template x-for="t in ['info', 'warning', 'danger']">
-                        <button @click="alertType = t" :class="alertType === t ? 'bg-sky-500 text-white' : 'bg-slate-50 text-slate-400'" class="flex-1 py-2 rounded-xl text-[10px] font-black uppercase" x-text="t"></button>
-                    </template>
+    <div x-show="$store.modals.alert" x-cloak
+        class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[100] flex items-center justify-center p-6">
+        <div @click.away="$store.modals.close('alert')"
+            class="bg-white rounded-[3rem] p-12 max-w-md w-full relative border border-slate-100 shadow-2xl">
+            <h2 class="text-2xl font-black text-slate-900 mb-8">Send Alert</h2>
+            <p class="text-sm text-slate-500 mb-6 font-bold"
+                x-text="'Target: ' + (targetPharma.shop_name || 'Partner')"></p>
+            <textarea x-model="alertMsg" class="w-full p-4 bg-slate-50 rounded-2xl border border-slate-200 h-32 mb-6"
+                placeholder="Message..."></textarea>
+            <div class="flex gap-2 mb-6">
+                <template x-for="t in ['info', 'warning', 'danger']">
+                    <button @click="alertType = t"
+                        :class="alertType === t ? 'bg-sky-500 text-white' : 'bg-slate-50 text-slate-400'"
+                        class="flex-1 py-2 rounded-xl text-[10px] font-black uppercase transition-all"
+                        x-text="t"></button>
+                </template>
+            </div>
+            <button @click="submitAlert()"
+                class="w-full py-4 bg-slate-900 text-white rounded-2xl font-black uppercase shadow-lg shadow-slate-900/20">Send
+                Alert</button>
+        </div>
+    </div>
+
+    <div x-show="$store.modals.addHosp" x-cloak
+        class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[100] flex items-center justify-center p-6">
+        <div @click.away="$store.modals.close('addHosp')"
+            class="bg-white rounded-[3rem] p-12 max-w-2xl w-full relative border border-slate-100 shadow-2xl max-h-[90vh] overflow-y-auto custom-scrollbar">
+            <h2 class="text-2xl font-black text-slate-900 mb-8">Add Hospital</h2>
+            <form action="/admin/add_hospital_submit" method="POST" class="grid grid-cols-2 gap-6">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <div class="space-y-4">
+                    <input type="text" name="name" placeholder="Hospital Name" required
+                        class="w-full p-4 bg-slate-50 rounded-2xl border border-slate-200">
+                    <input type="text" name="phone" placeholder="Phone" required
+                        class="w-full p-4 bg-slate-50 rounded-2xl border border-slate-200">
+                    <input type="text" name="address" placeholder="Address" required
+                        class="w-full p-4 bg-slate-50 rounded-2xl border border-slate-200">
+
                 </div>
-                <button @click="submitAlert()" class="w-full py-4 bg-slate-900 text-white rounded-2xl font-black uppercase">Send Alert</button>
-            </div>
+                <div class="space-y-4">
+                    <p class="text-[10px] font-black uppercase text-slate-400">Ambulance Details</p>
+                    <input type="text" name="ambulance_no" placeholder="Plate No" required
+                        class="w-full p-4 bg-slate-50 rounded-2xl border border-slate-200">
+                    <input type="text" name="driver_no" placeholder="Driver Phone" required
+                        class="w-full p-4 bg-slate-50 rounded-2xl border border-slate-200">
+                    <button type="submit"
+                        class="w-full py-4 bg-emerald-500 text-white rounded-2xl font-black uppercase shadow-lg shadow-emerald-500/20">Save
+                        Hospital</button>
+                    <button type="button" @click="$store.modals.close('addHosp')"
+                        class="w-full py-4 text-slate-400 font-black uppercase hover:text-slate-600 transition-all text-center">Cancel</button>
+                </div>
+            </form>
         </div>
-    </template>
+    </div>
 
-    <template x-if="showAddHospModal">
-        <div class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[100] flex items-center justify-center p-6">
-            <div @click.away="showAddHospModal = false" class="bg-white rounded-[3rem] p-12 max-w-2xl w-full relative">
-                <h2 class="text-2xl font-black text-slate-900 mb-8">Add Hospital</h2>
-                <form action="/admin/add_hospital_submit" method="POST" class="grid grid-cols-2 gap-6">
-                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                    <div class="space-y-4">
-                        <input type="text" name="name" placeholder="Hospital Name" required class="w-full p-4 bg-slate-50 rounded-2xl border">
-                        <input type="text" name="phone" placeholder="Phone" required class="w-full p-4 bg-slate-50 rounded-2xl border">
-                        <input type="text" name="address" placeholder="Address" required class="w-full p-4 bg-slate-50 rounded-2xl border">
-                        <div class="grid grid-cols-2 gap-2">
-                            <input type="number" step="any" name="latitude" placeholder="Lat" class="w-full p-4 bg-slate-50 rounded-2xl border">
-                            <input type="number" step="any" name="longitude" placeholder="Lng" class="w-full p-4 bg-slate-50 rounded-2xl border">
-                        </div>
-                    </div>
-                    <div class="space-y-4">
-                        <p class="text-[10px] font-black uppercase text-slate-400">Ambulance Details</p>
-                        <input type="text" name="ambulance_no" placeholder="Plate No" required class="w-full p-4 bg-slate-50 rounded-2xl border">
-                        <input type="text" name="driver_name" placeholder="Driver Name" required class="w-full p-4 bg-slate-50 rounded-2xl border">
-                        <input type="text" name="driver_no" placeholder="Driver Phone" required class="w-full p-4 bg-slate-50 rounded-2xl border">
-                        <button type="submit" class="w-full py-4 bg-emerald-500 text-white rounded-2xl font-black uppercase">Save Hospital</button>
-                    </div>
-                </form>
-            </div>
-        </div>
-    </template>
+    <div x-show="$store.modals.addAmb" x-cloak
+        class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[100] flex items-center justify-center p-6">
+        <div @click.away="$store.modals.close('addAmb')"
+            class="bg-white rounded-[3rem] p-12 max-w-md w-full relative border border-slate-100 shadow-2xl max-h-[90vh] overflow-y-auto custom-scrollbar">
+            <h2 class="text-2xl font-black text-slate-900 mb-8">Deploy Ambulance</h2>
+            <form action="/admin/add_ambulance_submit" method="POST" class="space-y-4">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
 
-    <template x-if="showAddAmbModal">
-        <div class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[100] flex items-center justify-center p-6">
-            <div @click.away="showAddAmbModal = false" class="bg-white rounded-[3rem] p-12 max-w-md w-full relative">
-                <h2 class="text-2xl font-black text-slate-900 mb-8">Deploy Ambulance</h2>
-                <form action="/admin/add_ambulance_submit" method="POST" class="space-y-4">
-                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                    <select name="hospital_id" class="w-full p-4 bg-slate-50 rounded-2xl border font-black text-sm">
-                        <option value="">Independent Fleet</option>
-                        <template x-for="h in hospitals" :key="h.id">
-                            <option :value="h.id" x-text="h.name"></option>
-                        </template>
-                    </select>
-                    <input type="text" name="ambulance_no" placeholder="Plate Number" required class="w-full p-4 bg-slate-50 rounded-2xl border">
-                    <input type="text" name="driver_name" placeholder="Driver" required class="w-full p-4 bg-slate-50 rounded-2xl border">
-                    <input type="text" name="driver_no" placeholder="Phone" required class="w-full p-4 bg-slate-50 rounded-2xl border">
-                    <button type="submit" class="w-full py-4 bg-red-500 text-white rounded-2xl font-black uppercase">Deploy</button>
-                </form>
-            </div>
+                <!-- If joining an existing hospital -->
+                <select name="hospital_id" x-model="selectedHosp"
+                    class="w-full p-4 bg-slate-50 rounded-2xl border border-slate-200 font-black text-sm">
+                    <option value="">Independent Fleet (Create New Location)</option>
+                    <template x-for="h in hospitals" :key="h.id">
+                        <option :value="h.id" x-text="h.name"></option>
+                    </template>
+                </select>
+
+                <!-- Independent Fleet Details (Only show if no hospital is selected) -->
+                <div x-show="!selectedHosp" class="space-y-4 p-4 border border-red-100 rounded-2xl bg-red-50/30">
+                    <p class="text-[10px] font-black uppercase text-red-400 tracking-widest">Base Location Details</p>
+                    <input type="text" name="hospital_name" placeholder="Base/Fleet Name (e.g., Red Cross Hub)"
+                        class="w-full p-4 bg-white rounded-2xl border border-slate-200">
+                    <input type="text" name="address" placeholder="Physical Address"
+                        class="w-full p-4 bg-white rounded-2xl border border-slate-200">
+
+                </div>
+
+                <div class="space-y-4 pt-2">
+                    <input type="text" name="ambulance_no" placeholder="Plate Number" required
+                        class="w-full p-4 bg-slate-50 rounded-2xl border border-slate-200">
+                    <input type="text" name="driver_no" placeholder="Driver Phone" required
+                        class="w-full p-4 bg-slate-50 rounded-2xl border border-slate-200">
+                </div>
+
+                <button type="submit"
+                    class="w-full py-4 bg-red-500 text-white rounded-2xl font-black uppercase shadow-lg shadow-red-500/20 mt-4">Deploy
+                    Ambulance</button>
+                <button type="button" @click="$store.modals.close('addAmb')"
+                    class="w-full py-4 text-slate-400 font-black uppercase hover:text-slate-600 transition-all text-center">Cancel</button>
+            </form>
         </div>
-    </template>
+    </div>
 
 </body>
 

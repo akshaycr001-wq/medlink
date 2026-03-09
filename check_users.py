@@ -1,7 +1,8 @@
-from app import app
-from models import db, User
+from app import app, db
+from models import User
+
 with app.app_context():
-    pharmacies = User.query.filter_by(role='pharmacy').all()
-    print(f"Found {len(pharmacies)} pharmacies:")
-    for p in pharmacies:
-        print(f"ID: {p.id}, Username: {p.username}, Name: {p.name}")
+    users = User.query.all()
+    print(f"Total users found: {len(users)}")
+    for u in users:
+        print(f"ID: {u.id} | Username: {u.username} | Role: {u.role} | Name: {u.name}")

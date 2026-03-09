@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MedLink | Verify Email</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script defer src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;700;800&display=swap"
+        rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Plus Jakarta Sans', sans-serif;
+        }
+
+        .digit-input {
+            width: 52px;
+            height: 64px;
+            font-size: 1.5rem;
+            font-weight: 800;
+            text-align: center;
+            border: 2px solid #e2e8f0;
+            border-radius: 1rem;
+            outline: none;
+            transition: border-color 0.2s;
+            background: #f8fafc;
+            caret-color: #0d9488;
+        }
+
+        .digit-input:focus {
+            border-color: #0d9488;
+            background: white;
+            box-shadow: 0 0 0 3px rgba(13, 148, 136, 0.1);
+        }
+
+        .digit-input.filled {
+            border-color: #0d9488;
+            background: white;
+        }
+
+        @keyframes countdown {
+            from {
+                stroke-dashoffset: 0;
+            }
+
+            to {
+                stroke-dashoffset: 339;
+            }
+        }
+
+        .timer-ring {
+            animation: countdown 120s linear forwards;
+        }
+
+        @keyframes shake {
+
+            0%,
+            100% {
+                transform: translateX(0)
+            }
+
+            20%,
+            60% {
+                transform: translateX(-8px)
+            }
+
+            40%,
+            80% {
+                transform: translateX(8px)
+            }
+        }
+
+        .shake {
+            animation: shake 0.4s ease;
+        }
+    </style>
+</head>
+
+<body class="min-h-screen bg-gradient-to-br from-slate-50 to-teal-50 flex items-center justify-center p-4">
+
+    <div class="w-full max-w-md" x-data="otpVerify()" x-init="startTimer()">
+        <!-- Card -->
+        <div class="bg-white rounded-[2.5rem] shadow-2xl shadow-slate-200/80 p-10 border border-slate-100">
+
+            <!-- Icon + Title -->
+            <div class="text-center mb-8">
+                <div
+                    class="w-20 h-20 bg-teal-50 rounded-[2rem] flex items-center justify-center mx-auto mb-5 border border-teal-100">
+                    <i class="fas fa-envelope-open text-3xl text-teal-600"></i>
+                </div>
+                <h1 class="text-2xl font-black text-slate-900 tracking-tight">Check Your Gmail</h1>
+                <p class="text-slate-400 text-sm mt-2 font-medium">
+                    We sent a 6-digit code to<br>
+                    <span class="font-black text-slate-700">{{ email }}</span>
+                </p>
+            </div>
+
+            <!-- Flash Messages -->
+            {% with messages = get_flashed_messages() %}
+            {% if messages %}
+            <div
+                class="mb-6 p-4 rounded-2xl bg-red-50 text-red-600 text-xs font-bold border border-red-100 text-center">
+                {% for message in messages %}<p>{{ message }}</p>{% endfor %}
+            </div>
+            {% endif %}
+            {% endwith %}
+
+            <!-- Timer Ring -->
+            <div class="flex justify-center mb-8">
+                <div class="relative w-24 h-24">
+                    <svg class="w-24 h-24 -rotate-90" viewBox="0 0 120 120">
+                        <circle cx="60" cy="60" r="54" fill="none" stroke="#f1f5f9" stroke-width="8" />
+                        <circle cx="60" cy="60" r="54" fill="none" stroke="#0d9488" stroke-width="8"
+                            stroke-dasharray="339" stroke-dashoffset="0" stroke-linecap="round"
+                            :class="{'timer-ring': timerStarted}" x-ref="timerCircle" />
+                    </svg>
+                    <div class="absolute inset-0 flex items-center justify-center flex-col">
+                        <span class="text-2xl font-black" :class="timeLeft <= 10 ? 'text-red-500' : 'text-slate-900'"
+                            x-text="timeLeft + 's'"></span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- OTP Input Form -->
+            <form action="{{ url_for('verify_otp') }}" method="POST">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+                <!-- 6 Digit Boxes -->
+                <div class="flex justify-center gap-3 mb-8" id="otpBoxes">
+                    <template x-for="(digit, index) in digits" :key="index">
+                        <input type="text" inputmode="numeric" maxlength="1" class="digit-input"
+                            :class="digit ? 'filled' : ''" :id="'digit-' + index" x-model="digits[index]"
+                            @input="handleInput($event, index)" @keydown="handleKeydown($event, index)"
+                            @paste.prevent="handlePaste($event)">
+                    </template>
+                </div>
+                <input type="hidden" name="otp_code" :value="digits.join('')">
+
+                <!-- Expired Banner -->
+                <div x-show="expired" x-transition
+                    class="mb-6 p-4 bg-red-50 border border-red-100 rounded-2xl text-center">
+                    <p class="text-red-600 font-black text-sm">⏱ Code expired!</p>
+                    <a href="{{ url_for('register') }}"
+                        class="text-teal-600 font-black text-xs hover:underline mt-1 block">
+                        ← Go back and register again
+                    </a>
+                </div>
+
+                <!-- Submit Button -->
+                <button type="submit" :disabled="digits.join('').length !== 6 || expired"
+                    class="w-full py-4 bg-teal-700 text-white rounded-2xl font-black uppercase tracking-widest text-sm hover:bg-teal-800 transition-all disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-3">
+                    <i class="fas fa-shield-check"></i>
+                    Verify & Complete Registration
+                </button>
+            </form>
+
+            <!-- Back link -->
+            <p class="text-center mt-6 text-xs text-slate-400 font-bold">
+                Wrong email?
+                <a href="{{ url_for('register') }}" class="text-teal-600 hover:underline font-black">Go back</a>
+            </p>
+        </div>
+    </div>
+
+    <script>
+        function otpVerify() {
+            return {
+                digits: ['', '', '', '', '', ''],
+                timeLeft: 120,
+                expired: false,
+                timerStarted: false,
+                _interval: null,
+
+                startTimer() {
+                    this.$nextTick(() => { this.timerStarted = true; });
+                    this._interval = setInterval(() => {
+                        this.timeLeft--;
+                        if (this.timeLeft <= 0) {
+                            clearInterval(this._interval);
+                            this.expired = true;
+                        }
+                    }, 1000);
+                },
+
+                handleInput(e, index) {
+                    const val = e.target.value.replace(/[^0-9]/g, '');
+                    this.digits[index] = val;
+                    this.digits = [...this.digits]; // trigger reactivity
+                    if (val && index < 5) {
+                        document.getElementById(`digit-${index + 1}`)?.focus();
+                    }
+                },
+
+                handleKeydown(e, index) {
+                    if (e.key === 'Backspace' && !this.digits[index] && index > 0) {
+                        document.getElementById(`digit-${index - 1}`)?.focus();
+                    }
+                },
+
+                handlePaste(e) {
+                    const text = (e.clipboardData || window.clipboardData).getData('text').replace(/[^0-9]/g, '').slice(0, 6);
+                    text.split('').forEach((ch, i) => { this.digits[i] = ch; });
+                    this.digits = [...this.digits];
+                    document.getElementById(`digit-${Math.min(text.length, 5)}`)?.focus();
+                }
+            }
+        }
+    </script>
+</body>
+
+</html>

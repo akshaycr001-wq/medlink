@@ -13,6 +13,7 @@ class User(UserMixin, db.Model):
     role = db.Column(db.String(20), nullable=False)  # 'admin', 'sub_admin', 'pharmacy', 'patient'
     name = db.Column(db.String(100), nullable=False)
     email_verified = db.Column(db.Boolean, default=True)  # Set to True by default for easier testing
+    is_suspended = db.Column(db.Boolean, default=False)
     
     # Relationships
     pharmacy_details = db.relationship('Pharmacy', backref='owner', uselist=False)
@@ -24,7 +25,8 @@ class User(UserMixin, db.Model):
             'username': self.username,
             'role': self.role,
             'email': self.email,
-            'phone': self.phone
+            'phone': self.phone,
+            'is_suspended': self.is_suspended
         }
 
 class Pharmacy(db.Model):
@@ -39,6 +41,7 @@ class Pharmacy(db.Model):
     latitude = db.Column(db.Float, nullable=True)
     longitude = db.Column(db.Float, nullable=True)
     location_address = db.Column(db.String(255), nullable=True) # Added location address
+    is_suspended = db.Column(db.Boolean, default=False)
     
     inventory = db.relationship('Medicine', backref='pharmacy', lazy=True)
     reviews = db.relationship('Review', backref='pharmacy', lazy=True)
@@ -55,7 +58,8 @@ class Pharmacy(db.Model):
             'license_doc': self.license_doc,
             'latitude': self.latitude,
             'longitude': self.longitude,
-            'location_address': self.location_address
+            'location_address': self.location_address,
+            'is_suspended': self.is_suspended
         }
 
 class Medicine(db.Model):
@@ -73,6 +77,7 @@ class Medicine(db.Model):
         return {
             'id': self.id,
             'pharmacy_id': self.pharmacy_id,
+            'pharmacy_name': self.pharmacy.shop_name if self.pharmacy else 'Unknown',
             'name': self.name,
             'qty': self.qty,
             'price': self.price,
@@ -84,18 +89,24 @@ class Medicine(db.Model):
 class Review(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     pharmacy_id = db.Column(db.Integer, db.ForeignKey('pharmacy.id'), nullable=False)
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=True)
     user_name = db.Column(db.String(100), nullable=False)
     rating = db.Column(db.Integer, nullable=False)
     comment = db.Column(db.Text, nullable=True)
+    pharmacy_reply = db.Column(db.Text, nullable=True)
+    reply_at = db.Column(db.DateTime, nullable=True)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
     def to_dict(self):
         return {
             'id': self.id,
+            'user_id': self.user_id,
             'user_name': self.user_name,
             'rating': self.rating,
             'comment': self.comment,
-            'created_at': self.created_at.strftime('%b %d')
+            'pharmacy_reply': self.pharmacy_reply,
+            'reply_at': self.reply_at.strftime('%b %d, %H:%M') if self.reply_at else None,
+            'created_at': self.created_at.strftime('%b %d, %H:%M')
         }
 
 class Hospital(db.Model):
@@ -104,10 +115,11 @@ class Hospital(db.Model):
     address = db.Column(db.String(255), nullable=True)
     phone = db.Column(db.String(20), nullable=False)
     ambulance_no = db.Column(db.String(20), nullable=True)
-    driver_name = db.Column(db.String(100), nullable=True)
     driver_no = db.Column(db.String(20), nullable=True)
     latitude = db.Column(db.Float, nullable=True)
     longitude = db.Column(db.Float, nullable=True)
+    is_active = db.Column(db.Boolean, default=True, nullable=False)  # Soft delete flag
+    archived_at = db.Column(db.DateTime, nullable=True)             # When it was archived
 
     def to_dict(self):
         return {
@@ -116,10 +128,11 @@ class Hospital(db.Model):
             'phone': self.phone,
             'address': self.address,
             'ambulance_no': self.ambulance_no,
-            'driver_name': self.driver_name,
             'driver_no': self.driver_no,
             'latitude': self.latitude,
-            'longitude': self.longitude
+            'longitude': self.longitude,
+            'is_active': self.is_active,
+            'archived_at': self.archived_at.strftime('%b %d, %Y') if self.archived_at else None
         }
 
 class SOS(db.Model):
@@ -149,22 +162,26 @@ class SOS(db.Model):
 class Ambulance(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     vehicle_number = db.Column(db.String(50), nullable=False)
-    driver_name = db.Column(db.String(100), nullable=False)
     driver_phone = db.Column(db.String(20), nullable=False)
-    hospital_id = db.Column(db.Integer, db.ForeignKey('hospital.id'), nullable=True) # Linked hospital
+    hospital_id = db.Column(db.Integer, db.ForeignKey('hospital.id'), nullable=True)
     address = db.Column(db.String(255), nullable=True)
     area = db.Column(db.String(100), nullable=True)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    is_active = db.Column(db.Boolean, default=True, nullable=False)  # Soft delete flag
+    archived_at = db.Column(db.DateTime, nullable=True)             # When it was archived
+    hospital = db.relationship('Hospital', backref='ambulances', foreign_keys=[hospital_id])
 
     def to_dict(self):
         return {
             'id': self.id,
             'vehicle_number': self.vehicle_number,
-            'driver_name': self.driver_name,
             'driver_phone': self.driver_phone,
             'hospital_id': self.hospital_id,
+            'hospital_name': self.hospital.name if self.hospital else None,
             'address': self.address,
-            'area': self.area
+            'area': self.area,
+            'is_active': self.is_active,
+            'archived_at': self.archived_at.strftime('%b %d, %Y') if self.archived_at else None
         }
 
 class SystemAlert(db.Model):

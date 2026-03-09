@@ -1,4 +1,16 @@
 from flask import Flask, render_template, request, redirect, url_for, flash, session, jsonify, send_from_directory
+from dotenv import load_dotenv
+import os
+import random
+import re
+from flask_mail import Mail, Message
+
+# OTP Storage (In-memory for demo; use Redis or DB for production)
+OTP_STORE = {}
+
+# Load environment variables IMMEDIATELY
+load_dotenv()
+
 from flask_sqlalchemy import SQLAlchemy
 from sqlalchemy import or_
 from flask_login import LoginManager, UserMixin, login_user, login_required, logout_user, current_user
@@ -12,15 +24,53 @@ from werkzeug.utils import secure_filename
 from models import db, User, Pharmacy, Medicine, Review, Hospital, SOS, SystemAlert, MedicineAlternative, Ambulance
 from config import config
 from datetime import datetime, timedelta
-import os
 import re
 import math
 import json
 import secrets
-from dotenv import load_dotenv
+import urllib.parse
+import urllib.request
 
-# Load environment variables
-load_dotenv()
+def geocode_location(name, address):
+    """Attempt to geocode a location name and address using Nominatim (free)."""
+    try:
+        headers = {'User-Agent': 'MedLink-Emergency-Network/1.2'}
+        
+        # Strategy 1: Highly specific search (Address + Kochi + Kerala)
+        if address:
+            query = f"{name}, {address}, Kochi, Kerala, India"
+            safe_query = urllib.parse.quote(query)
+            url = f"https://nominatim.openstreetmap.org/search?q={safe_query}&format=json&limit=1"
+            req = urllib.request.Request(url, headers=headers)
+            with urllib.request.urlopen(req, timeout=5) as response:
+                data = json.loads(response.read().decode())
+                if data:
+                    return float(data[0]['lat']), float(data[0]['lon'])
+
+        # Strategy 2: Relaxed search (Name + Kochi)
+        query = f"{name}, Kochi, India"
+        safe_query = urllib.parse.quote(query)
+        url = f"https://nominatim.openstreetmap.org/search?q={safe_query}&format=json&limit=1"
+        req = urllib.request.Request(url, headers=headers)
+        with urllib.request.urlopen(req, timeout=5) as response:
+            data = json.loads(response.read().decode())
+            if data:
+                return float(data[0]['lat']), float(data[0]['lon'])
+                
+        # Strategy 3: Just the address (if name is too obscure)
+        if address:
+            query = f"{address}, Kochi, India"
+            safe_query = urllib.parse.quote(query)
+            url = f"https://nominatim.openstreetmap.org/search?q={safe_query}&format=json&limit=1"
+            req = urllib.request.Request(url, headers=headers)
+            with urllib.request.urlopen(req, timeout=5) as response:
+                data = json.loads(response.read().decode())
+                if data:
+                    return float(data[0]['lat']), float(data[0]['lon'])
+                    
+    except Exception as e:
+        print(f"DEBUG: Geocoding failed for {name} ({address}): {e}")
+    return None, None
 
 # Create Flask app
 app = Flask(__name__)
@@ -28,6 +78,17 @@ app = Flask(__name__)
 # Load configuration based on environment
 env = os.environ.get('FLASK_ENV', 'development')
 app.config.from_object(config[env])
+app.config['TEMPLATES_AUTO_RELOAD'] = True
+
+# Flask-Mail Configuration
+app.config['MAIL_SERVER'] = 'smtp.gmail.com'
+app.config['MAIL_PORT'] = 587
+app.config['MAIL_USE_TLS'] = True
+app.config['MAIL_USERNAME'] = os.environ.get('MAIL_USERNAME')
+app.config['MAIL_PASSWORD'] = os.environ.get('MAIL_PASSWORD')
+app.config['MAIL_DEFAULT_SENDER'] = os.environ.get('MAIL_USERNAME')
+MAIL_DEBUG_MODE = os.environ.get('MAIL_DEBUG_MODE', 'True').lower() == 'true'
+mail = Mail(app)
 
 # Initialize security extensions
 # We use a robust initialization for production but keep it safe for local Python 3.14
@@ -51,6 +112,48 @@ except Exception as e:
         def exempt(self, f): return f
     limiter = MockLimiter()
     csrf = MockCSRF()
+
+@app.route('/send_otp', methods=['POST'])
+@csrf.exempt
+def send_otp():
+    data = request.json
+    email = data.get('gmail') if data else None
+    
+    if not email or not re.match(r'^[a-zA-Z0-9._%+-]+@gmail\.com$', email):
+        return jsonify({'error': 'Invalid Gmail address'}), 400
+        
+    otp = str(random.randint(100000, 999999))
+    OTP_STORE[email] = {
+        'code': otp,
+        'timestamp': datetime.now()
+    }
+    
+    if MAIL_DEBUG_MODE or not app.config.get('MAIL_USERNAME') or app.config.get('MAIL_USERNAME') == 'your_gmail@gmail.com':
+        # DEBUG MODE: Print OTP to terminal
+        print("\n" + "="*40)
+        print(f"[MedLink OTP] Verification code for {email}: {otp}")
+        print("="*40 + "\n")
+    else:
+        # PRODUCTION MODE: Send real email
+        try:
+            msg = Message(
+                subject='MedLink - Your Verification Code',
+                recipients=[email],
+                html=f'''
+                <div style="font-family: sans-serif; padding: 20px; max-width: 400px;">
+                    <h2 style="color: #0d9488;">MedLink Verification</h2>
+                    <p>Your one-time verification code is:</p>
+                    <h1 style="letter-spacing: 8px; color: #1e293b; font-size: 36px;">{otp}</h1>
+                    <p style="color: #64748b; font-size: 12px;">This code expires in 10 minutes. Do not share it with anyone.</p>
+                </div>
+                '''
+            )
+            mail.send(msg)
+        except Exception as e:
+            print(f"Email send error: {e}")
+            return jsonify({'error': 'Failed to send email. Please check server mail config.'}), 500
+    
+    return jsonify({'message': 'OTP sent successfully'})
 
 # Security headers (only enforce HTTPS in production)
 if env == 'production':
@@ -112,15 +215,24 @@ def login():
                     flash('Please use the Admin Portal', 'error')
                     return redirect(url_for('admin_login'))
                 
+                if user.is_suspended:
+                    flash('Your account has been suspended by an administrator.', 'error')
+                    return redirect(url_for('login'))
+                
                 # Check email verification (Bypassed for now)
                 # if not getattr(user, 'email_verified', True):
                 #     flash('Please verify your email before logging in. Check the server console for the verification link.')
                 #     return redirect(url_for('login'))
 
-                login_user(user)
                 if user.role == 'pharmacy':
+                    pharma = Pharmacy.query.filter_by(user_id=user.id).first()
+                    if pharma and not pharma.verified:
+                        flash('Your pharmacy account is pending admin approval.', 'warning')
+                        return redirect(url_for('login'))
+                    login_user(user)
                     return redirect(url_for('pharmacy_dashboard'))
                 elif user.role == 'patient':
+                    login_user(user)
                     return redirect(url_for('patient_dashboard'))
             else:
                 flash('Incorrect password. Please try again or use Forgot Password.')
@@ -136,50 +248,105 @@ _verify_tokens = {}  # { token: { 'user_id': int, 'expires': datetime } }
 @app.route('/forgot_password', methods=['GET', 'POST'])
 def forgot_password():
     if request.method == 'POST':
-        username = request.form.get('username', '').strip()
-        user = User.query.filter_by(username=username).first()
+        email = request.form.get('email', '').strip()
+        user = User.query.filter_by(email=email).first()
+        
         if user:
-            token = secrets.token_urlsafe(32)
-            _reset_tokens[token] = {
+            # Generate 6-digit OTP
+            otp = str(random.randint(100000, 999999))
+            OTP_STORE[email] = {
+                'code': otp,
+                'timestamp': datetime.now(),
                 'user_id': user.id,
-                'expires': datetime.now() + timedelta(minutes=30)
+                'type': 'password_reset'
             }
-            reset_url = url_for('reset_password', token=token, _external=True)
-            # Log the reset link (replace with real email in production)
-            print(f'[PASSWORD RESET] User: {username} | Link: {reset_url}')
-            app.logger.info(f'Password reset requested for {username}. Link: {reset_url}')
-        # Always show success to prevent username enumeration
-        flash('If that account exists, a recovery link has been sent. Check the server console.')
-        return redirect(url_for('login'))
-    return render_template('forgot_password.html')
+            
+            # Send OTP via email
+            if MAIL_DEBUG_MODE or not app.config.get('MAIL_USERNAME'):
+                print(f"\n[PASSWORD RESET OTP] User: {user.username} | Email: {email} | OTP: {otp}\n")
+            else:
+                try:
+                    msg = Message(
+                        subject='MedLink - Password Reset Code',
+                        recipients=[email],
+                        html=f'''
+                        <div style="font-family: sans-serif; padding: 20px; max-width: 400px; border: 1px solid #eee; border-radius: 12px;">
+                            <h2 style="color: #0d9488;">MedLink Reset</h2>
+                            <p>You requested a password reset. Your verification code is:</p>
+                            <h1 style="letter-spacing: 8px; color: #1e293b; font-size: 36px; text-align: center;">{otp}</h1>
+                            <p style="color: #64748b; font-size: 12px;">This code expires in 2 minutes. If you didn't request this, ignore this email.</p>
+                        </div>
+                        '''
+                    )
+                    mail.send(msg)
+                except Exception as e:
+                    print(f"Mail error: {e}")
+                    flash('Error sending verification code. Please try again.')
+                    return redirect(url_for('forgot_password'))
+            
+            return render_template('forgot_password.html', step=2, email=email)
+            
+        flash('If that account exists, a verification code has been sent.')
+        return redirect(url_for('forgot_password'))
+    return render_template('forgot_password.html', step=1)
 
-@app.route('/reset_password/<token>', methods=['GET', 'POST'])
-def reset_password(token):
+@app.route('/verify_reset_otp', methods=['POST'])
+def verify_reset_otp():
+    email = request.form.get('email')
+    otp_code = request.form.get('otp_code')
+    stored = OTP_STORE.get(email)
+    
+    if not stored or stored.get('type') != 'password_reset' or stored['code'] != otp_code:
+        flash('Invalid verification code.')
+        return render_template('forgot_password.html', step=2, email=email)
+        
+    if (datetime.now() - stored['timestamp']).total_seconds() > 120:
+        flash('Code expired. Please try again.')
+        return redirect(url_for('forgot_password'))
+        
+    # Generate temporary reset token valid for 10 minutes
+    reset_token = secrets.token_urlsafe(32)
+    _reset_tokens[reset_token] = {
+        'user_id': stored['user_id'],
+        'expires': datetime.now() + timedelta(minutes=10)
+    }
+    
+    # Store in session to ensure the user stays on the same reset flow
+    session['reset_active'] = reset_token
+    return render_template('forgot_password.html', step=3, token=reset_token)
+
+@app.route('/reset_password', methods=['POST'])
+def reset_password():
+    token = request.form.get('token')
     token_data = _reset_tokens.get(token)
+    
     if not token_data or token_data['expires'] < datetime.now():
         _reset_tokens.pop(token, None)
-        flash('This reset link has expired or is invalid. Please request a new one.')
+        flash('Session expired. Please start again.')
         return redirect(url_for('forgot_password'))
     
-    if request.method == 'POST':
-        password = request.form.get('password', '')
-        confirm = request.form.get('confirm_password', '')
-        if len(password) < 6:
-            flash('Password must be at least 6 characters.')
-            return render_template('reset_password.html')
-        if password != confirm:
-            flash('Passwords do not match.')
-            return render_template('reset_password.html')
-        
-        user = User.query.get(token_data['user_id'])
-        if user:
-            user.password = generate_password_hash(password, method='scrypt')
-            db.session.commit()
-            _reset_tokens.pop(token, None)
-            flash('Password reset successful! You can now log in.')
-            return redirect(url_for('login'))
+    password = request.form.get('password')
+    confirm = request.form.get('confirm_password')
     
-    return render_template('reset_password.html')
+    if not password or len(password) < 8:
+        flash('Password must be at least 8 characters.')
+        return render_template('forgot_password.html', step=3, token=token)
+        
+    if password != confirm:
+        flash('Passwords do not match.')
+        return render_template('forgot_password.html', step=3, token=token)
+        
+    user = User.query.get(token_data['user_id'])
+    if user:
+        user.password = generate_password_hash(password, method='scrypt')
+        db.session.commit()
+        _reset_tokens.pop(token, None)
+        session.pop('reset_active', None)
+        flash('Password updated successfully! You can now log in.')
+        return redirect(url_for('login'))
+        
+    flash('User not found.')
+    return redirect(url_for('forgot_password'))
 
 @app.route('/verify_email/<token>')
 def verify_email(token):
@@ -209,6 +376,10 @@ def admin_login():
                 if user.role not in ['admin', 'sub_admin']:
                     flash('Access Denied: Admins Only')
                     return redirect(url_for('login'))
+                
+                if user.role == 'sub_admin' and user.is_suspended:
+                    flash('Your administrative access has been suspended.')
+                    return redirect(url_for('admin_login'))
                     
                 login_user(user)
                 return redirect(url_for('admin_dashboard'))
@@ -225,92 +396,157 @@ def register():
         username = request.form.get('username')
         email = request.form.get('gmail')
         password = request.form.get('password')
+        confirm_password = request.form.get('confirm_password')
         role = request.form.get('role') # 'patient' or 'pharmacy'
-        name = request.form.get('name')
-        phone = request.form.get('phone') # Added phone capture
+        phone = request.form.get('phone')
         
-        if User.query.filter_by(username=username).first():
-            flash('Username already exists')
+        # 1. Basic Gmail Validation
+        if not email or not re.match(r'^[a-zA-Z0-9._%+-]+@gmail\.com$', email):
+            flash('Please provide a valid @gmail.com address')
+            return redirect(url_for('register'))
+
+        # 2. Password Confirmation
+        if password != confirm_password:
+            flash('Passwords do not match')
             return redirect(url_for('register'))
             
         if len(password) < 8:
             flash('Password must be at least 8 characters long')
             return redirect(url_for('register'))
 
-        hashed_password = generate_password_hash(password, method='scrypt')
-        
-        # Capture name based on role
-        if role == 'pharmacy':
-            name = request.form.get('shop_name')
-        else:
-            name = request.form.get('name')
+        # 3. Existing Username Check
+        if User.query.filter_by(username=username).first():
+            flash('Username already exists')
+            return redirect(url_for('register'))
             
-        new_user = User(username=username, phone=phone, email=email, password=hashed_password, role=role, name=name, email_verified=True)
-        db.session.add(new_user)
-        db.session.commit()
-        
-        # Issue email verification token
-        verify_token = secrets.token_urlsafe(32)
-        _verify_tokens[verify_token] = {
-            'user_id': new_user.id,
-            'expires': datetime.now() + timedelta(hours=24)
+        # Store pending registration in session
+        session['pending_registration'] = {
+            'username': username,
+            'email': email,
+            'password': generate_password_hash(password, method='scrypt'),
+            'role': role,
+            'phone': phone,
+            'shop_name': request.form.get('shop_name'),
+            'latitude': request.form.get('latitude'),
+            'longitude': request.form.get('longitude'),
+            'location_address': request.form.get('location_address'),
+            'prc_no': request.form.get('prc_no'),
+            'dl_no': request.form.get('dl_no')
         }
-        verify_url = url_for('verify_email', token=verify_token, _external=True)
-        print(f'[EMAIL VERIFY] User: {username} | Link: {verify_url}')
-        app.logger.info(f'Verification link for {username}: {verify_url}')
-        
-        if role == 'pharmacy':
-            # Create associated Pharmacy record
-            shop_name = request.form.get('shop_name')
-            phone = request.form.get('phone')
-            dl_no = request.form.get('dl_no')
-            prc_no = request.form.get('prc_no')
-            
-            if not phone or not phone.isdigit() or len(phone) != 10:
-                flash('Invalid phone number. Must be 10 digits.')
+
+        # Generate and send OTP automatically
+        otp = str(random.randint(100000, 999999))
+        OTP_STORE[email] = {
+            'code': otp,
+            'timestamp': datetime.now()
+        }
+
+        if MAIL_DEBUG_MODE or not app.config.get('MAIL_USERNAME') or app.config.get('MAIL_USERNAME') == 'your_gmail@gmail.com':
+            print("\n" + "="*40)
+            print(f"[MedLink OTP] Verification code for {email}: {otp}")
+            print("="*40 + "\n")
+        else:
+            try:
+                msg = Message(
+                    subject='MedLink - Your Verification Code',
+                    recipients=[email],
+                    html=f'''
+                    <div style="font-family: sans-serif; padding: 20px; max-width: 400px;">
+                        <h2 style="color: #0d9488;">MedLink Verification</h2>
+                        <p>Your one-time verification code is:</p>
+                        <h1 style="letter-spacing: 8px; color: #1e293b; font-size: 36px;">{otp}</h1>
+                        <p style="color: #64748b; font-size: 12px;">This code expires in 2 minutes. Do not share it with anyone.</p>
+                    </div>
+                    '''
+                )
+                mail.send(msg)
+            except Exception as e:
+                print(f"Email send error: {e}")
+                flash('Failed to send verification email. Please try again.')
                 return redirect(url_for('register'))
 
-            # Handle File Upload (Optional)
-            license_doc_name = None
-            if 'license_doc' in request.files:
-                file = request.files['license_doc']
-                if file and file.filename != '':
-                    if allowed_file(file.filename):
-                        filename = secure_filename(f"DL_{new_user.id}_{file.filename}")
-                        file.save(os.path.join(app.config['UPLOAD_FOLDER'], filename))
-                        license_doc_name = filename
-                    else:
-                        flash('Invalid file type for license document.')
-                        return redirect(url_for('register'))
+        return redirect(url_for('verify_otp'))
 
-            location_address = request.form.get('location_address')
-            latitude = request.form.get('latitude')
-            longitude = request.form.get('longitude')
-            
-            # Convert lat/long to float if present
-            lat = float(latitude) if latitude else None
-            lng = float(longitude) if longitude else None
-
-            new_pharmacy = Pharmacy(
-                user_id=new_user.id, 
-                shop_name=shop_name, 
-                phone=phone, 
-                dl_no=dl_no,
-                prc_no=prc_no,
-                license_doc=license_doc_name,
-                location_address=location_address, 
-                latitude=lat, 
-                longitude=lng
-            )
-            db.session.add(new_pharmacy)
-            db.session.commit()
-            
-        flash('Registration successful, please login.')
-        return redirect(url_for('login'))
-        
     return render_template('register.html')
 
+@app.route('/verify_otp', methods=['GET', 'POST'])
+def verify_otp():
+    pending = session.get('pending_registration')
+    if not pending:
+        flash('Please register first')
+        return redirect(url_for('register'))
+
+    email = pending['email']
+    
+    if request.method == 'POST':
+        otp_code = request.form.get('otp_code')
+        stored_otp = OTP_STORE.get(email)
+
+        if not stored_otp or stored_otp['code'] != otp_code:
+            flash('Invalid verification code.')
+            return render_template('verify_otp.html', email=email)
+
+        # 120 second expiry as requested
+        if (datetime.now() - stored_otp['timestamp']).total_seconds() > 120:
+            flash('Verification code expired. Please register again.')
+            session.pop('pending_registration', None)
+            if email in OTP_STORE: del OTP_STORE[email]
+            return redirect(url_for('register'))
+
+        # Create user
+        role = pending['role']
+        # Ensure 'name' is populated as it's non-nullable in the User model
+        user_display_name = pending['shop_name'] if role == 'pharmacy' else pending['username']
+        
+        new_user = User(
+            username=pending['username'],
+            email=email,
+            password=pending['password'],
+            role=role,
+            name=user_display_name,
+            phone=pending['phone'],
+            email_verified=True
+        )
+        db.session.add(new_user)
+        db.session.flush() # Get user ID before creating pharmacy
+        
+        if role == 'pharmacy':
+            # Safe float conversion for pharmacy coordinates
+            try:
+                lat_val = float(pending['latitude']) if pending['latitude'] else None
+                lng_val = float(pending['longitude']) if pending['longitude'] else None
+            except (ValueError, TypeError):
+                lat_val, lng_val = None, None
+
+            new_pharmacy = Pharmacy(
+                owner=new_user, # Linking via owner backref
+                shop_name=pending['shop_name'],
+                phone=pending['phone'],
+                location_address=pending['location_address'],
+                latitude=lat_val,
+                longitude=lng_val,
+                prc_no=pending['prc_no'],
+                dl_no=pending['dl_no'],
+                verified=False # Must be approved by admin
+            )
+            db.session.add(new_pharmacy)
+
+        db.session.commit()
+        session.pop('pending_registration', None)
+        if email in OTP_STORE: del OTP_STORE[email]
+        
+        if role == 'patient':
+            login_user(new_user)
+            flash('Registration successful! Welcome to MedLink.')
+            return redirect(url_for('patient_dashboard'))
+        else:
+            flash('Email verified! Your pharmacy account is now waiting for admin approval. You will be able to login once approved.', 'success')
+            return redirect(url_for('login'))
+
+    return render_template('verify_otp.html', email=email)
+
 @app.route('/logout')
+
 @login_required
 def logout():
     logout_user()
@@ -323,14 +559,18 @@ def admin_dashboard():
         return "Access Denied"
     
     pharmacies = Pharmacy.query.all()
-    hospitals = Hospital.query.all()
+    hospitals = Hospital.query.filter_by(is_active=True).all()
     medicines = Medicine.query.all()
-    ambulances = Ambulance.query.all()
+    ambulances = Ambulance.query.filter_by(is_active=True).all()
     emergencies = SOS.query.order_by(SOS.created_at.desc()).all()
+    
+    # Archived items for Archive Tab
+    archived_hospitals = Hospital.query.filter_by(is_active=False).all()
+    archived_ambulances = Ambulance.query.filter_by(is_active=False).all()
     
     # Statistics
     medicines_count = Medicine.query.count()
-    ambulances_count = Ambulance.query.count()
+    ambulances_count = Ambulance.query.filter_by(is_active=True).count()
     
     sub_admins = []
     if current_user.role == 'admin':
@@ -342,11 +582,11 @@ def admin_dashboard():
     medicines_json = json.dumps([m.to_dict() for m in medicines])
     ambulances_json = json.dumps([a.to_dict() for a in ambulances])
     emergencies_json = json.dumps([e.to_dict() for e in emergencies])
+    archived_hospitals_json = json.dumps([h.to_dict() for h in archived_hospitals])
+    archived_ambulances_json = json.dumps([a.to_dict() for a in archived_ambulances])
     sub_admins_json = json.dumps([sa.to_dict() for sa in sub_admins])
     
-    # Helper to get pharmacy name for medicine list 
-    # (Medicine.to_dict doesn't include pharmacy name by default, let's add it client side or here)
-    # Actually, let's enrich medicine dicts with pharmacy name here
+    # Enrich medicine dicts with pharmacy name
     med_list = []
     for m in medicines:
         m_dict = m.to_dict()
@@ -361,10 +601,13 @@ def admin_dashboard():
                            medicines_json=medicines_json,
                            ambulances_json=ambulances_json,
                            emergencies_json=emergencies_json,
+                           archived_hospitals_json=archived_hospitals_json,
+                           archived_ambulances_json=archived_ambulances_json,
                            medicines_count=medicines_count,
                            ambulances_count=ambulances_count,
                            pharmacies_count=len(pharmacies),
-                           hospitals_count=len(hospitals))
+                           hospitals_count=len(hospitals),
+                           sub_admins=sub_admins)
 
 @app.route('/admin/add_hospital_submit', methods=['POST'])
 @login_required
@@ -376,20 +619,18 @@ def add_hospital_submit():
     address = request.form.get('address')
     phone = request.form.get('phone') or "N/A"
     ambulance_no = request.form.get('ambulance_no')
-    driver_name = request.form.get('driver_name')
     driver_no = request.form.get('driver_no')
-    lat = request.form.get('latitude')
-    lng = request.form.get('longitude')
-    
+    # Automatic Geocoding
+    lat_val, lng_val = geocode_location(name, address)
+
     new_hosp = Hospital(
         name=name, 
         address=address,
         phone=phone, 
         ambulance_no=ambulance_no, 
-        driver_name=driver_name, 
         driver_no=driver_no,
-        latitude=float(lat) if lat else None,
-        longitude=float(lng) if lng else None
+        latitude=lat_val,
+        longitude=lng_val
     )
     db.session.add(new_hosp)
     db.session.commit()
@@ -397,7 +638,6 @@ def add_hospital_submit():
     # Also create a standalone Ambulance entry linked to this hospital for the fleet tab
     new_amb = Ambulance(
         vehicle_number=ambulance_no,
-        driver_name=driver_name,
         driver_phone=driver_no,
         hospital_id=new_hosp.id,
         address=address
@@ -408,15 +648,94 @@ def add_hospital_submit():
     flash('Hospital and primary transport integrated successfully')
     return redirect(url_for('admin_dashboard'))
 
+@app.route('/admin/add_ambulance_submit', methods=['POST'])
+@login_required
+def add_ambulance_submit():
+    if current_user.role not in ['admin', 'sub_admin']:
+        return "Access Denied"
+    
+    hospital_id = request.form.get('hospital_id')
+    ambulance_no = request.form.get('ambulance_no')
+    driver_no = request.form.get('driver_no')
+    
+    # If it's an Independent Fleet, create a base Hospital record for it first
+    if not hospital_id:
+        hosp_name = request.form.get('hospital_name') or "Independent Ambulance Fleet"
+        address = request.form.get('address') or "Mobile Unit"
+        # Automatic Geocoding for independent fleet
+        lat_val, lng_val = geocode_location(hosp_name, address)
+            
+        new_base = Hospital(
+            name=hosp_name,
+            address=address,
+            phone=driver_no,
+            ambulance_no=ambulance_no,
+            driver_no=driver_no,
+            latitude=lat_val,
+            longitude=lng_val
+        )
+        db.session.add(new_base)
+        db.session.commit()
+        hospital_id = new_base.id
+    else:
+        # Fetch address from selected hospital
+        hosp = Hospital.query.get(hospital_id)
+        address = hosp.address if hosp else ""
+        
+    # Create the ambulance record
+    new_amb = Ambulance(
+        vehicle_number=ambulance_no,
+        driver_phone=driver_no,
+        hospital_id=hospital_id,
+        address=address
+    )
+    db.session.add(new_amb)
+    db.session.commit()
+    
+    flash('Ambulance deployed successfully')
+    return redirect(url_for('admin_dashboard'))
+
+
 @app.route('/admin/delete_hospital/<int:id>')
 @login_required
 def delete_hospital(id):
     if current_user.role not in ['admin', 'sub_admin']:
         return "Access Denied"
     hosp = Hospital.query.get_or_404(id)
-    db.session.delete(hosp)
+    
+    # SOFT DELETE: archive the hospital instead of hard deleting
+    hosp.is_active = False
+    hosp.archived_at = datetime.now()
+    
+    # Archive all ambulances linked to this hospital too
+    ambulances = Ambulance.query.filter_by(hospital_id=id).all()
+    for amb in ambulances:
+        amb.is_active = False
+        amb.archived_at = datetime.now()
+        
     db.session.commit()
+    
+    if request.headers.get('X-Requested-With') == 'XMLHttpRequest' or request.is_json:
+        return jsonify({'success': True, 'message': f"'{hosp.name}' archived."})
+        
+    flash(f"Hospital '{hosp.name}' archived (not deleted). It can be restored from the archive tab.", 'info')
     return redirect(url_for('admin_dashboard'))
+
+@app.route('/admin/restore_hospital/<int:id>')
+@login_required
+def restore_hospital(id):
+    if current_user.role not in ['admin', 'sub_admin']:
+        return "Access Denied"
+    hosp = Hospital.query.get_or_404(id)
+    hosp.is_active = True
+    hosp.archived_at = None
+    # Restore all linked ambulances too
+    for amb in Ambulance.query.filter_by(hospital_id=id).all():
+        amb.is_active = True
+        amb.archived_at = None
+    db.session.commit()
+    return jsonify({'success': True, 'message': f"'{hosp.name}' restored."})
+
 
 @app.route('/admin/verify_pharmacy/<int:id>')
 @login_required
@@ -549,31 +868,7 @@ def delete_medicine(id):
         return jsonify({'success': True})
     return redirect(url_for('admin_dashboard'))
 
-@app.route('/admin/ambulances')
-@login_required
-def admin_ambulances():
-    return redirect(url_for('admin_dashboard'))
 
-@app.route('/admin/add_ambulance_submit', methods=['POST'])
-@login_required
-def add_ambulance_submit():
-    if current_user.role not in ['admin', 'sub_admin']:
-        return "Access Denied"
-    veh_no = request.form.get('ambulance_no')
-    driver = request.form.get('driver_name')
-    phone = request.form.get('driver_no')
-    hosp_id = request.form.get('hospital_id')
-    
-    new_amb = Ambulance(
-        vehicle_number=veh_no,
-        driver_name=driver,
-        driver_phone=phone,
-        hospital_id=hosp_id if hosp_id else None
-    )
-    db.session.add(new_amb)
-    db.session.commit()
-    flash('Ambulance driver deployed successfully')
-    return redirect(url_for('admin_dashboard'))
 
 @app.route('/admin/delete_ambulance/<int:id>', methods=['POST', 'GET'])
 @login_required
@@ -581,11 +876,25 @@ def delete_ambulance(id):
     if current_user.role not in ['admin', 'sub_admin']:
         return jsonify({'error': 'Unauthorized'}), 403
     amb = Ambulance.query.get_or_404(id)
-    db.session.delete(amb)
+    # SOFT DELETE: archive instead of hard delete
+    amb.is_active = False
+    amb.archived_at = datetime.now()
     db.session.commit()
     if request.headers.get('X-Requested-With') == 'XMLHttpRequest' or request.is_json:
-        return jsonify({'success': True})
+        return jsonify({'success': True, 'message': f"Ambulance '{amb.vehicle_number}' archived."})
     return redirect(url_for('admin_dashboard'))
+
+@app.route('/admin/restore_ambulance/<int:id>')
+@login_required
+def restore_ambulance(id):
+    if current_user.role not in ['admin', 'sub_admin']:
+        return jsonify({'error': 'Unauthorized'}), 403
+    amb = Ambulance.query.get_or_404(id)
+    amb.is_active = True
+    amb.archived_at = None
+    db.session.commit()
+    return jsonify({'success': True, 'message': f"Ambulance '{amb.vehicle_number}' restored."})
+
 
 @app.route('/admin/broadcasts')
 @login_required
@@ -626,8 +935,37 @@ def admin_send_alert():
     )
     db.session.add(new_alert)
     db.session.commit()
-    
     return jsonify({'success': True})
+
+@app.route('/admin/toggle_user_suspend/<int:id>', methods=['POST'])
+@login_required
+def toggle_user_suspend(id):
+    if current_user.role != 'admin':
+        return jsonify({'error': 'Unauthorized: Super Admin required'}), 403
+    
+    user = User.query.get_or_404(id)
+    if user.role == 'admin':
+        return jsonify({'error': 'Cannot suspend super admin'}), 400
+        
+    user.is_suspended = not user.is_suspended
+    db.session.commit()
+    return jsonify({'success': True, 'suspended': user.is_suspended})
+
+@app.route('/admin/toggle_pharmacy_suspend/<int:id>', methods=['POST'])
+@login_required
+def toggle_pharmacy_suspend(id):
+    if current_user.role != 'admin':
+        return jsonify({'error': 'Unauthorized: Super Admin required'}), 403
+        
+    pharmacy = Pharmacy.query.get_or_404(id)
+    pharmacy.is_suspended = not pharmacy.is_suspended
+    if pharmacy.owner:
+        pharmacy.owner.is_suspended = pharmacy.is_suspended
+    db.session.commit()
+    return jsonify({'success': True, 'suspended': pharmacy.is_suspended})
+
+
+@app.route('/admin/add_admin')
 @login_required
 def add_admin():
     return redirect(url_for('admin_dashboard'))
@@ -796,7 +1134,12 @@ def patient_dashboard():
     if current_user.role != 'patient':
         return "Access Denied"
     
-    return render_template('dashboard_patient.html', user=current_user)
+    # Fetch reviews submitted by this user
+    user_reviews = Review.query.filter_by(user_id=current_user.id).order_by(Review.created_at.desc()).all()
+    
+    return render_template('dashboard_patient.html', 
+                           user=current_user, 
+                           user_reviews=user_reviews)
 
 @app.route('/patient/nearby_hospitals')
 @login_required
@@ -806,9 +1149,20 @@ def nearby_hospitals():
         
     lat = request.args.get('lat', type=float)
     lng = request.args.get('lng', type=float)
+    location_query = request.args.get('location_query', '')
     radius = request.args.get('radius', default=15.0, type=float) # Default 15km
     
-    hospitals = Hospital.query.all()
+    # PRIORITIZE manual location_query if provided (allows user to override browser location)
+    if location_query:
+        glat, glng = geocode_location(location_query, "")
+        if glat and glng:
+            lat, lng = glat, glng
+    # Fallback to lat/lng only if no valid location_query was processed
+    elif (not lat or not lng):
+         # If no lat/lng and no query, we just use None which returns all hospitals with 0 dist
+         pass
+
+    hospitals = Hospital.query.filter_by(is_active=True).all()
     nearby = []
     
     for h in hospitals:
@@ -816,30 +1170,14 @@ def nearby_hospitals():
         if lat and lng and h.latitude and h.longitude:
             dist = haversine(lat, lng, h.latitude, h.longitude)
             if dist <= radius:
-                nearby.append({
-                    'id': h.id,
-                    'name': h.name,
-                    'phone': h.phone,
-                    'ambulance_no': h.ambulance_no,
-                    'driver_name': h.driver_name,
-                    'driver_no': h.driver_no,
-                    'latitude': h.latitude,
-                    'longitude': h.longitude,
-                    'distance': round(dist, 2)
-                })
+                data = h.to_dict()
+                data['distance'] = round(dist, 2)
+                nearby.append(data)
         elif not lat or not lng:
             # If no location provided, return all but with 0 distance
-            nearby.append({
-                'id': h.id,
-                'name': h.name,
-                'phone': h.phone,
-                'ambulance_no': h.ambulance_no,
-                'driver_name': h.driver_name,
-                'driver_no': h.driver_no,
-                'latitude': h.latitude,
-                'longitude': h.longitude,
-                'distance': 0
-            })
+            data = h.to_dict()
+            data['distance'] = 0
+            nearby.append(data)
             
     return jsonify(nearby)
 
@@ -870,6 +1208,16 @@ def search_medicine():
     query = request.args.get('query', '')
     user_lat = request.args.get('lat', type=float)
     user_lng = request.args.get('lng', type=float)
+    location_query = request.args.get('location_query', '')
+    
+    # PRIORITIZE manual location_query override
+    if location_query:
+        glat, glng = geocode_location(location_query, "")
+        if glat and glng:
+            user_lat, user_lng = glat, glng
+    elif not user_lat or not user_lng:
+        # Fallback for old clients or missing location
+        pass
     
     if len(query) < 2:
         return jsonify([])
@@ -947,18 +1295,47 @@ def search_medicine():
 @csrf.exempt
 @login_required
 def submit_review():
-    # Implementation for reviews
     data = request.json
     pharmacy_name = data.get('pharmacy_name')
-    # Find pharmacy by name or pass ID
     pharmacy = Pharmacy.query.filter_by(shop_name=pharmacy_name).first()
     
     if pharmacy:
-        review = Review(pharmacy_id=pharmacy.id, user_name=current_user.name, rating=data.get('rating'), comment=data.get('comment'))
+        review = Review(
+            pharmacy_id=pharmacy.id, 
+            user_id=current_user.id,
+            user_name=current_user.name, 
+            rating=data.get('rating'), 
+            comment=data.get('comment')
+        )
         db.session.add(review)
         db.session.commit()
         return jsonify({'success': True})
-    return jsonify({'success': True})
+    return jsonify({'error': 'Pharmacy not found'}), 404
+
+@app.route('/pharmacy/feedback-reply/<int:id>', methods=['POST'])
+@csrf.exempt
+@login_required
+def reply_review(id):
+    print(f"DEBUG: reply_review triggered for id {id}")
+    if current_user.role != 'pharmacy':
+        print(f"DEBUG: Unauthorized role {current_user.role}")
+        return jsonify({'error': 'Unauthorized'}), 403
+        
+    review = Review.query.get(id)
+    if not review:
+        print(f"DEBUG: Review {id} not found in DB")
+        return jsonify({'error': 'Review not found'}), 404
+        
+    print(f"DEBUG: Found review {review.id} for user {review.user_name}")
+    data = request.json
+    reply = data.get('reply')
+    
+    if reply:
+        review.pharmacy_reply = reply
+        review.reply_at = datetime.utcnow()
+        db.session.commit()
+        return jsonify({'success': True})
+    return jsonify({'error': 'Reply cannot be empty'}), 400
 
 @app.route('/admin/send_alert', methods=['POST'])
 @csrf.exempt
@@ -1054,6 +1431,19 @@ if __name__ == '__main__':
                 db.session.add(MedicineAlternative(medicine_name=brand, alternative_name=alt))
         db.session.commit()
 
+    # Start background scheduler for Expiry Alerts (Only in main worker process to avoid duplicates)
+    if os.environ.get('WERKZEUG_RUN_MAIN') == 'true' or not app.config.get('DEBUG', True):
+        from apscheduler.schedulers.background import BackgroundScheduler
+        from send_expiry_alerts import send_expiry_alerts
+        try:
+            scheduler = BackgroundScheduler()
+            # Run daily at 8:00 AM
+            scheduler.add_job(func=send_expiry_alerts, trigger="cron", hour=8, minute=0)
+            scheduler.start()
+            print("✅ Background Expiry Alert Scheduler Started (Runs daily at 08:00).")
+        except Exception as e:
+            print(f"Failed to start scheduler: {e}")
+
     # Get debug mode from config
-    debug_mode = app.config.get('DEBUG', False)
-    app.run(debug=False, host='0.0.0.0', use_reloader=False)
+    debug_mode = app.config.get('DEBUG', True)
+    app.run(debug=True, host='0.0.0.0', port=5000)

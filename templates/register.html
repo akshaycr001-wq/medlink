@@ -60,32 +60,27 @@
             <input type="hidden" name="latitude" x-model="lat">
             <input type="hidden" name="longitude" x-model="lng">
 
-            <!-- Manual Gmail Option -->
+            <!-- Gmail Input -->
             <div class="mb-6 p-6 bg-slate-50 border border-slate-100 rounded-[2rem] relative overflow-hidden">
                 <div class="flex items-center gap-3 mb-4">
                     <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" class="w-5 h-5"
                         alt="Google">
-                    <span class="text-sm font-black text-slate-700">Gmail Option</span>
+                    <span class="text-sm font-black text-slate-700">Gmail Verification</span>
                 </div>
-                <div class="space-y-2">
-                    <label class="block text-[10px] font-black text-slate-400 uppercase tracking-widest">Enter Gmail
-                        Address</label>
-                    <input type="email" name="gmail" placeholder="yourname@gmail.com"
-                        class="w-full px-5 py-4 bg-white border border-slate-200 rounded-xl outline-none focus:border-teal-500 font-bold text-sm">
-                </div>
-                <div class="flex items-center gap-4 my-6">
-                    <div class="flex-1 h-px bg-slate-200"></div>
-                    <span class="text-[10px] font-black text-slate-400 uppercase tracking-widest">And set
-                        credentials</span>
-                    <div class="flex-1 h-px bg-slate-200"></div>
-                </div>
+                <label class="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Gmail
+                    Address</label>
+                <input type="email" name="gmail" placeholder="yourname@gmail.com" x-model="gmail" required
+                    class="w-full px-5 py-4 bg-white border border-slate-200 rounded-xl outline-none focus:border-teal-500 font-bold text-sm">
+                <p x-show="gmail.length > 0 && !isGmailValid()" class="text-red-500 text-[10px] mt-2 font-bold">
+                    Please enter a valid @gmail.com address</p>
+                <p class="text-slate-400 text-[10px] mt-2 font-bold">
+                    <i class="fas fa-info-circle text-teal-500"></i>
+                    A 6-digit verification code will be sent to this email when you click Create Account (Expires in 2
+                    mins)
+                </p>
             </div>
 
-            <div x-show="role === 'patient' || role === 'admin'">
-                <label class="block text-xs font-bold text-slate-500 uppercase mb-1">Full Name</label>
-                <input type="text" name="name" :required="role === 'patient' || role === 'admin'" placeholder="John Doe"
-                    class="w-full px-5 py-4 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:border-teal-500 font-bold">
-            </div>
+            <!-- Full Name only for pharmacy (shop name handled separately for pharmacy role) -->
 
             <div>
                 <label class="block text-xs font-bold text-slate-500 uppercase mb-1">Username</label>
@@ -97,15 +92,32 @@
                 <label class="block text-xs font-bold text-slate-500 uppercase mb-1">Password</label>
                 <div class="relative">
                     <input :type="showPassword ? 'text' : 'password'" name="password" required placeholder="••••••••"
-                        x-model="password"
+                        x-model="password" minlength="8"
                         class="w-full px-5 py-4 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:border-teal-500 font-bold pr-12">
                     <button type="button" @click="showPassword = !showPassword"
                         class="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 hover:text-teal-600 transition-colors">
                         <i class="fas" :class="showPassword ? 'fa-eye-slash' : 'fa-eye'"></i>
                     </button>
                 </div>
-                <p x-show="password.length > 0 && password.length < 8" class="text-red-500 text-xs mt-1 font-bold">Must
-                    be at least 8 characters</p>
+            </div>
+
+            <div class="relative">
+                <label class="block text-xs font-bold text-slate-500 uppercase mb-1">Confirm Password</label>
+                <div class="relative">
+                    <input :type="showConfirmPassword ? 'text' : 'password'" name="confirm_password" required
+                        placeholder="••••••••" x-model="confirmPassword"
+                        class="w-full px-5 py-4 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:border-teal-500 font-bold pr-12">
+                    <button type="button" @click="showConfirmPassword = !showConfirmPassword"
+                        class="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 hover:text-teal-600 transition-colors">
+                        <i class="fas" :class="showConfirmPassword ? 'fa-eye-slash' : 'fa-eye'"></i>
+                    </button>
+                </div>
+                <div class="mt-2 space-y-1">
+                    <p x-show="password.length > 0 && password.length < 8" class="text-red-500 text-[10px] font-bold">
+                        Must be at least 8 characters</p>
+                    <p x-show="confirmPassword.length > 0 && password !== confirmPassword"
+                        class="text-red-500 text-[10px] font-bold">Passwords do not match</p>
+                </div>
             </div>
 
             <div>
@@ -180,7 +192,9 @@
             return {
                 role: 'patient',
                 showPassword: false,
+                showConfirmPassword: false,
                 password: '',
+                confirmPassword: '',
                 phone: '',
                 phoneError: '',
                 lat: '',
@@ -188,6 +202,8 @@
                 address: '',
                 loadingLocation: false,
                 locationStatus: '',
+                gmail: '',
+                submitting: false,
 
                 validatePhone() {
                     this.phone = this.phone.replace(/[^0-9]/g, '');
@@ -203,44 +219,48 @@
                         this.locationStatus = "Geolocation is not supported by your browser";
                         return;
                     }
-
                     this.loadingLocation = true;
                     this.locationStatus = "Fetching location...";
-
                     navigator.geolocation.getCurrentPosition(
                         (position) => {
                             this.lat = position.coords.latitude;
                             this.lng = position.coords.longitude;
                             this.loadingLocation = false;
-                            this.locationStatus = `Location captured: ${this.lat.toFixed(4)}, ${this.lng.toFixed(4)}`;
-                            // Optionally reverse geocode here if you had an API key
+                            this.locationStatus = `Location captured: ${this.lat.toFixed(6)}, ${this.lng.toFixed(6)}`;
                             if (!this.address) this.address = "Location Coordinates Captured";
                         },
                         (error) => {
                             this.loadingLocation = false;
                             this.locationStatus = "Unable to retrieve location. Please allow permissions.";
-                            console.error(error);
-                        }
+                        },
+                        { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
                     );
                 },
 
+                isGmailValid() {
+                    const pattern = /^[a-zA-Z0-9._%+-]+@gmail\.com$/;
+                    return pattern.test(this.gmail);
+                },
+
                 isValid() {
+                    if (!this.isGmailValid()) return false;
                     if (this.password.length < 8) return false;
+                    if (this.password !== this.confirmPassword) return false;
                     if (this.role === 'pharmacy') {
                         if (this.phone.length !== 10) return false;
+                        if (!this.address || this.address === '') return false;
                     }
                     return true;
                 },
 
                 submitForm(e) {
-                    if (this.isValid()) {
-                        e.target.submit();
-                    }
+                    if (!this.isValid()) return;
+                    this.submitting = true;
+                    e.target.submit();
                 }
             }
         }
     </script>
-
 </body>
 
 </html>
