@@ -695,6 +695,65 @@ def add_ambulance_submit():
     flash('Ambulance deployed successfully')
     return redirect(url_for('admin_dashboard'))
 
+@app.route('/admin/edit_hospital_submit', methods=['POST'])
+@login_required
+def edit_hospital_submit():
+    if current_user.role not in ['admin', 'sub_admin']:
+        return "Access Denied"
+    
+    hospital_id = request.form.get('id')
+    hosp = Hospital.query.get(hospital_id)
+    if not hosp:
+        flash('Hospital not found')
+        return redirect(url_for('admin_dashboard'))
+    
+    old_address = hosp.address
+    hosp.name = request.form.get('name')
+    hosp.address = request.form.get('address')
+    hosp.phone = request.form.get('phone')
+    hosp.ambulance_no = request.form.get('ambulance_no')
+    hosp.driver_no = request.form.get('driver_no')
+    
+    # Re-geocode if address changed
+    if hosp.address != old_address:
+        lat, lng = geocode_location(hosp.name, hosp.address)
+        if lat and lng:
+            hosp.latitude = lat
+            hosp.longitude = lng
+            
+    db.session.commit()
+    flash('Hospital details updated successfully')
+    return redirect(url_for('admin_dashboard'))
+
+@app.route('/admin/edit_ambulance_submit', methods=['POST'])
+@login_required
+def edit_ambulance_submit():
+    if current_user.role not in ['admin', 'sub_admin']:
+        return "Access Denied"
+    
+    ambulance_id = request.form.get('id')
+    amb = Ambulance.query.get(ambulance_id)
+    if not amb:
+        flash('Ambulance not found')
+        return redirect(url_for('admin_dashboard'))
+    
+    amb.vehicle_number = request.form.get('ambulance_no')
+    amb.driver_phone = request.form.get('driver_no')
+    
+    new_hosp_id = request.form.get('hospital_id')
+    if new_hosp_id:
+        amb.hospital_id = int(new_hosp_id)
+        hosp = Hospital.query.get(new_hosp_id)
+        if hosp:
+            amb.address = hosp.address
+    else:
+        amb.hospital_id = None
+        amb.address = "Mobile Unit"
+        
+    db.session.commit()
+    flash('Ambulance updated successfully')
+    return redirect(url_for('admin_dashboard'))
+
 
 @app.route('/admin/delete_hospital/<int:id>')
 @login_required

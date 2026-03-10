@@ -57,319 +57,6 @@
         }
     </style>
 
-    <script>
-        document.addEventListener('alpine:init', () => {
-            // GLOBAL MODAL STORE
-            Alpine.store('modals', {
-                addAdmin: false,
-                addHosp: false,
-                addAmb: false,
-                alert: false,
-                notif: false,
-                toggle(name) {
-                    this[name] = !this[name];
-                },
-                open(name) {
-                    this[name] = true;
-                },
-                close(name) {
-                    this[name] = false;
-                }
-            });
-
-            // MAIN ADMIN SYSTEM
-            Alpine.data('adminSystem', () => ({
-                currentTab: 'overview',
-                adminName: {{ (current_user.name or 'Admin') | tojson }},
-            adminRole: {{ (current_user.role or 'sub_admin') | tojson }},
-
-            // Search & Filter
-            search: '',
-            medicineSearch: '',
-            pharmacyFilterSnippet: '',
-            selectedHosp: '',
-            showNotif: false,
-
-            // Current Action Targets
-            targetPharma: {},
-            alertMsg: '',
-            alertType: 'info',
-            scanning: false,
-            scanResults: [],
-
-            // DATA INJECTION (Server Side)
-            pharmacies: {{ pharmacies_json | safe if pharmacies_json else '[]' }},
-        subAdmins: {{ sub_admins_json | safe if sub_admins_json else '[]' }},
-        hospitals: {{ hospitals_json | safe if hospitals_json else '[]' }},
-        medicines: {{ medicines_json | safe if medicines_json else '[]' }},
-        ambulances: {{ ambulances_json | safe if ambulances_json else '[]' }},
-        recentSOS: {{ emergencies_json | safe if emergencies_json else '[]' }},
-        archivedHospitals: {{ archived_hospitals_json | safe if archived_hospitals_json else '[]' }},
-        archivedAmbulances: {{ archived_ambulances_json | safe if archived_ambulances_json else '[]' }},
-
-        stats: {
-            pharmacies: {{ pharmacies_count or 0 }},
-            hospitals: {{ hospitals_count or 0 }},
-            medicines: {{ medicines_count or 0 }},
-            ambulances: {{ ambulances_count or 0 }}
-        },
-
-        tabs: [
-            { id: 'overview', name: 'Control Center', icon: 'fas fa-grid-2' },
-            { id: 'pharmacies', name: 'Pharmacy Network', icon: 'fas fa-store' },
-            { id: 'hospitals', name: 'Partner Hospitals', icon: 'fas fa-hospital' },
-            { id: 'medicines', name: 'Master Inventory', icon: 'fas fa-pills' },
-            { id: 'ambulances', name: 'Rescue Fleet', icon: 'fas fa-truck-medical' },
-            { id: 'sos', name: 'Emergency Feed', icon: 'fas fa-broadcast-tower' },
-            { id: 'admins', name: 'Access Control', icon: 'fas fa-user-shield' },
-            { id: 'alerts', name: 'Network Audit', icon: 'fas fa-clipboard-check' },
-            { id: 'archive', name: 'Archive Vault', icon: 'fas fa-box-archive' }
-        ],
-
-            init() {
-            console.log('MedLink Control Center: Online');
-            console.log('Role Context:', this.adminRole);
-
-            // Initialize tab from localStorage
-            const savedTab = localStorage.getItem('medlinkAdminTab');
-            if (savedTab) {
-                this.currentTab = savedTab;
-            }
-
-            // Watch for tab changes and save to localStorage
-            this.$watch('currentTab', value => {
-                localStorage.setItem('medlinkAdminTab', value);
-            });
-        },
-
-                // GETTERS (Calculated State)
-                get pendingCount() {
-            return (this.pharmacies || []).filter(p => !p.verified).length;
-        },
-
-                get expiringCount() {
-            return (this.medicines || []).filter(m => this.isNearExpiry(m.expiry)).length;
-        },
-
-                get filteredPharmacies() {
-            const list = this.pharmacies || [];
-            if (!this.search) return list;
-            const q = this.search.toLowerCase();
-            return list.filter(p =>
-                (p.shop_name || '').toLowerCase().includes(q) ||
-                (p.dl_no || '').toLowerCase().includes(q)
-            );
-        },
-
-                get filteredMedicines() {
-            let list = this.medicines || [];
-            if (this.pharmacyFilterSnippet) {
-                list = list.filter(m => m.pharmacy_name === this.pharmacyFilterSnippet);
-            }
-            if (this.medicineSearch) {
-                const q = this.medicineSearch.toLowerCase();
-                list = list.filter(m =>
-                    (m.name || '').toLowerCase().includes(q) ||
-                    (m.pharmacy_name && m.pharmacy_name.toLowerCase().includes(q))
-                );
-            }
-            return list;
-        },
-
-                get filteredSOS() {
-            return this.recentSOS || [];
-        },
-
-        // UTILITIES
-        isNearExpiry(date) {
-            if (!date) return false;
-            const d = new Date(date);
-            const today = new Date();
-            const diff = (d - today) / (1000 * 60 * 60 * 24);
-            return diff < 30;
-        },
-
-        viewPharmacyStock(name) {
-            this.pharmacyFilterSnippet = name;
-            this.medicineSearch = '';
-            this.currentTab = 'medicines';
-        },
-
-        openMap(lat, lng) {
-            if (lat && lng) {
-                window.open(`https://www.google.com/maps?q=${lat},${lng}`, '_blank');
-            } else {
-                alert('Location data not available.');
-            }
-        },
-
-                // ACTION METHODS (API Requests)
-                async verifyPharma(id) {
-            try {
-                const res = await fetch(`/admin/verify_pharmacy/${id}`);
-                if (res.ok) location.reload();
-            } catch (e) { console.error(e); }
-        },
-
-                async deletePharma(id) {
-            if (confirm('Permanently remove this pharmacy?')) {
-                try {
-                    const res = await fetch(`/admin/reject_pharmacy/${id}`);
-                    if (res.ok) location.reload();
-                } catch (e) { console.error(e); }
-            }
-        },
-
-                async deleteMedicine(id) {
-            if (confirm('Remove this medicine?')) {
-                try {
-                    const res = await fetch(`/admin/delete_medicine/${id}`);
-                    if (res.ok) location.reload();
-                } catch (e) { console.error(e); }
-            }
-        },
-
-                async deleteAmbulance(id) {
-            console.log('Archiving ambulance:', id);
-            if (confirm('Archive this unit? It will be moved to the archive vault.')) {
-                try {
-                    const res = await fetch(`/admin/delete_ambulance/${id}`);
-                    if (res.ok) location.reload();
-                    else console.error('Archive failed', res.status);
-                } catch (e) { console.error(e); }
-            }
-        },
-
-                async restoreAmbulance(id) {
-            console.log('Restoring ambulance:', id);
-            try {
-                const res = await fetch(`/admin/restore_ambulance/${id}`);
-                if (res.ok) location.reload();
-            } catch (e) { console.error(e); }
-        },
-
-                async deleteHospital(id) {
-            console.log('Archiving hospital:', id);
-            if (confirm('Archive this hospital? It can be restored from the archive vault.')) {
-                try {
-                    const res = await fetch(`/admin/delete_hospital/${id}`);
-                    if (res.ok) location.reload();
-                    else console.error('Archive failed', res.status);
-                } catch (e) { console.error(e); }
-            }
-        },
-
-                async restoreHospital(id) {
-            console.log('Restoring hospital:', id);
-            try {
-                const res = await fetch(`/admin/restore_hospital/${id}`);
-                if (res.ok) location.reload();
-            } catch (e) { console.error(e); }
-        },
-
-                async deleteAdmin(id) {
-            if (confirm('Revoke access for this sub-admin?')) {
-                try {
-                    const res = await fetch(`/admin/remove_sub_admin/${id}`);
-                    if (res.ok) location.reload();
-                } catch (e) { console.error(e); }
-            }
-        },
-
-                async toggleSuspendAdmin(id) {
-            if (confirm('Change suspension status?')) {
-                try {
-                    const res = await fetch(`/admin/toggle_user_suspend/${id}`, {
-                        method: 'POST',
-                        headers: { 'X-CSRFToken': '{{ csrf_token() }}' }
-                    });
-                    if (res.ok) location.reload();
-                } catch (e) { console.error(e); }
-            }
-        },
-
-                async toggleSuspendPharmacy(id) {
-            if (confirm('Change suspension status?')) {
-                try {
-                    const res = await fetch(`/admin/toggle_pharmacy_suspend/${id}`, {
-                        method: 'POST',
-                        headers: { 'X-CSRFToken': '{{ csrf_token() }}' }
-                    });
-                    if (res.ok) location.reload();
-                } catch (e) { console.error(e); }
-            }
-        },
-
-                async resolveSOS(id) {
-            try {
-                const res = await fetch(`/admin/resolve_broadcast/${id}`, {
-                    method: 'POST',
-                    headers: { 'X-CSRFToken': '{{ csrf_token() }}' }
-                });
-                if (res.ok) location.reload();
-            } catch (e) { console.error(e); }
-        },
-
-        openAlertModal(pharma) {
-            this.targetPharma = pharma || {};
-            this.alertMsg = '';
-            Alpine.store('modals').open('alert');
-        },
-
-                async submitAlert() {
-            if (!this.targetPharma.id) return;
-            try {
-                const res = await fetch('/admin/send_custom_alert', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'X-CSRFToken': '{{ csrf_token() }}'
-                    },
-                    body: JSON.stringify({
-                        pharmacy_id: this.targetPharma.id,
-                        message: this.alertMsg,
-                        type: this.alertType
-                    })
-                });
-                if (res.ok) {
-                    Alpine.store('modals').close('alert');
-                    alert('Alert sent successfully.');
-                }
-            } catch (e) { console.error(e); }
-        },
-
-                async scanAndAlert() {
-            this.scanning = true;
-            this.scanResults = [];
-            try {
-                const res = await fetch('/admin/scan_expiring_stock');
-                if (res.ok) {
-                    this.scanResults = await res.json();
-                }
-            } catch (e) { console.error(e); }
-
-            for (const m of this.scanResults) {
-                try {
-                    await fetch('/admin/send_custom_alert', {
-                        method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json',
-                            'X-CSRFToken': '{{ csrf_token() }}'
-                        },
-                        body: JSON.stringify({
-                            pharmacy_id: m.pharmacy_id,
-                            message: `URGENT: ${m.name} is expiring soon (${m.expiry}).`,
-                            type: 'danger'
-                        })
-                    });
-                } catch (e) { console.error(e); }
-            }
-            this.scanning = false;
-            alert('Broadcast complete.');
-        }
-            }));
-        });
-    </script>
 
 </head>
 
@@ -647,21 +334,37 @@
                                     class="w-14 h-14 bg-emerald-50 rounded-2xl flex items-center justify-center text-emerald-600">
                                     <i class="fas fa-hospital text-2xl"></i>
                                 </div>
-                                <button @click="deleteHospital(h.id)"
-                                    class="relative z-10 w-10 h-10 rounded-xl bg-slate-50 text-slate-400 hover:bg-red-50 hover:text-red-600 flex items-center justify-center transition-all">
-                                    <i class="fas fa-trash-can text-sm"></i>
-                                </button>
+                                <div class="flex gap-2 relative z-10">
+                                    <button @click="editHospital(h)"
+                                        class="w-10 h-10 rounded-xl bg-slate-50 text-slate-400 hover:bg-sky-50 hover:text-sky-600 flex items-center justify-center transition-all">
+                                        <i class="fas fa-pen-to-square text-sm"></i>
+                                    </button>
+                                    <button @click="deleteHospital(h.id)"
+                                        class="w-10 h-10 rounded-xl bg-slate-50 text-slate-400 hover:bg-red-50 hover:text-red-600 flex items-center justify-center transition-all">
+                                        <i class="fas fa-trash-can text-sm"></i>
+                                    </button>
+                                </div>
                             </div>
 
                             <h5 class="text-lg font-black text-slate-900 mb-2" x-text="h.name"></h5>
                             <div class="space-y-3 mb-8">
                                 <div class="flex items-center gap-3 text-xs font-bold text-slate-500">
                                     <i class="fas fa-location-dot text-emerald-500 w-4"></i>
-                                    <span x-text="h.address || 'Address not listed'"></span>
+                                    <span class="truncate" x-text="h.address || 'Address not listed'"></span>
                                 </div>
                                 <div class="flex items-center gap-3 text-xs font-bold text-slate-500">
                                     <i class="fas fa-phone text-emerald-500 w-4"></i>
-                                    <span x-text="h.phone"></span>
+                                    <div>
+                                        <p class="text-[9px] uppercase tracking-widest text-slate-400">Reception</p>
+                                        <p x-text="h.phone"></p>
+                                    </div>
+                                </div>
+                                <div class="flex items-center gap-3 text-xs font-bold text-slate-500">
+                                    <i class="fas fa-ambulance text-red-500 w-4"></i>
+                                    <div>
+                                        <p class="text-[9px] uppercase tracking-widest text-red-400">Emergency Line</p>
+                                        <p x-text="h.driver_no || 'N/A'"></p>
+                                    </div>
                                 </div>
                             </div>
 
@@ -802,6 +505,10 @@
                                     class="flex-1 py-4 bg-slate-900 text-white rounded-2xl text-[10px] font-black uppercase tracking-widest hover:bg-slate-800 flex items-center justify-center gap-3 transition-all">
                                     <i class="fas fa-phone"></i> Direct Link
                                 </a>
+                                <button @click="editAmbulance(a)"
+                                    class="w-16 h-16 bg-white border border-slate-200 rounded-2xl flex items-center justify-center text-sky-500 hover:bg-sky-500 hover:text-white transition-all shadow-md">
+                                    <i class="fas fa-pen-to-square"></i>
+                                </button>
                                 <button @click="deleteAmbulance(a.id)"
                                     class="w-16 h-16 bg-white border border-slate-200 rounded-2xl flex items-center justify-center text-red-500 hover:bg-red-500 hover:text-white transition-all shadow-md">
                                     <i class="fas fa-trash-can"></i>
@@ -1264,6 +971,201 @@
             </form>
         </div>
     </div>
+
+    <div x-show="$store.modals.editHosp" x-cloak
+        class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[100] flex items-center justify-center p-6">
+        <div @click.away="$store.modals.close('editHosp')"
+            class="bg-white rounded-[3rem] p-12 max-w-2xl w-full relative border border-slate-100 shadow-2xl max-h-[90vh] overflow-y-auto custom-scrollbar">
+            <h2 class="text-2xl font-black text-slate-900 mb-8">Edit Hospital</h2>
+            <form action="/admin/edit_hospital_submit" method="POST" class="grid grid-cols-2 gap-6">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <input type="hidden" name="id" :value="targetHosp.id">
+                <div class="space-y-4">
+                    <p class="text-[10px] font-black uppercase text-slate-400">Basic Info</p>
+                    <input type="text" name="name" x-model="targetHosp.name" placeholder="Hospital Name" required
+                        class="w-full p-4 bg-slate-50 rounded-2xl border border-slate-200">
+                    <input type="text" name="phone" x-model="targetHosp.phone" placeholder="Phone" required
+                        class="w-full p-4 bg-slate-50 rounded-2xl border border-slate-200 text-xs font-bold">
+                    <input type="text" name="address" x-model="targetHosp.address" placeholder="Address" required
+                        class="w-full p-4 bg-slate-50 rounded-2xl border border-slate-200 text-xs font-bold">
+                </div>
+                <div class="space-y-4">
+                    <p class="text-[10px] font-black uppercase text-slate-400">Ambulance Details</p>
+                    <input type="text" name="ambulance_no" x-model="targetHosp.ambulance_no" placeholder="Plate No"
+                        required class="w-full p-4 bg-slate-50 rounded-2xl border border-slate-200 text-xs font-bold">
+                    <input type="text" name="driver_no" x-model="targetHosp.driver_no" placeholder="Emergency Line"
+                        required class="w-full p-4 bg-slate-50 rounded-2xl border border-slate-200 text-xs font-bold">
+
+                    <button type="submit"
+                        class="w-full py-4 bg-sky-500 text-white rounded-2xl font-black uppercase shadow-lg shadow-sky-500/20">Update
+                        Records</button>
+                    <button type="button" @click="$store.modals.close('editHosp')"
+                        class="w-full py-4 text-slate-400 font-black uppercase hover:text-slate-600 transition-all text-center">Cancel</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <div x-show="$store.modals.editAmb" x-cloak
+        class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[100] flex items-center justify-center p-6">
+        <div @click.away="$store.modals.close('editAmb')"
+            class="bg-white rounded-[3rem] p-12 max-w-md w-full relative border border-slate-100 shadow-2xl max-h-[90vh] overflow-y-auto custom-scrollbar">
+            <h2 class="text-2xl font-black text-slate-900 mb-8">Update Fleet Asset</h2>
+            <form action="/admin/edit_ambulance_submit" method="POST" class="space-y-4">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <input type="hidden" name="id" :value="targetAmb.id">
+
+                <p class="text-[10px] font-black uppercase text-slate-400">Station Assignment</p>
+                <select name="hospital_id" x-model="selectedHosp"
+                    class="w-full p-4 bg-slate-50 rounded-2xl border border-slate-200 font-black text-sm">
+                    <option value="">Independent Fleet / Stand-by</option>
+                    <template x-for="h in hospitals" :key="h.id">
+                        <option :value="h.id" x-text="h.name"></option>
+                    </template>
+                </select>
+
+                <div class="space-y-4 pt-2">
+                    <p class="text-[10px] font-black uppercase text-slate-400 font-bold">Vehicle Details</p>
+                    <input type="text" name="ambulance_no" x-model="targetAmb.vehicle_number" placeholder="Plate Number"
+                        required class="w-full p-4 bg-slate-50 rounded-2xl border border-slate-200 font-bold">
+                    <input type="text" name="driver_no" x-model="targetAmb.driver_phone" placeholder="Contact Phone"
+                        required class="w-full p-4 bg-slate-50 rounded-2xl border border-slate-200 font-bold">
+                </div>
+
+                <button type="submit"
+                    class="w-full py-4 bg-sky-900 text-white rounded-2xl font-black uppercase shadow-lg shadow-sky-900/20 mt-4">Save
+                    Changes</button>
+                <button type="button" @click="$store.modals.close('editAmb')"
+                    class="w-full py-4 text-slate-400 font-black uppercase hover:text-slate-600 transition-all text-center">Cancel</button>
+            </form>
+        </div>
+    </div>
+
+    <script>
+        document.addEventListener('alpine:init', () => {
+            Alpine.store('modals', {
+                addAdmin: false, addHosp: false, editHosp: false,
+                addAmb: false, editAmb: false, alert: false, notif: false,
+                toggle(name) { this[name] = !this[name]; },
+                open(name) { this[name] = true; },
+                close(name) { this[name] = false; }
+            });
+
+            Alpine.data('adminSystem', () => ({
+                currentTab: 'overview',
+                adminName: {{ (current_user.name or 'Admin') | tojson }},
+            adminRole: {{ (current_user.role or 'sub_admin') | tojson }},
+            search: '', medicineSearch: '', pharmacyFilterSnippet: '',
+            selectedHosp: '', showNotif: false,
+            targetPharma: {}, targetHosp: {}, targetAmb: {},
+            alertMsg: '', alertType: 'info', scanning: false, scanResults: [],
+
+            pharmacies: {{ pharmacies_json | safe if pharmacies_json else '[]' }},
+        subAdmins: {{ sub_admins_json | safe if sub_admins_json else '[]' }},
+        hospitals: {{ hospitals_json | safe if hospitals_json else '[]' }},
+        medicines: {{ medicines_json | safe if medicines_json else '[]' }},
+        ambulances: {{ ambulances_json | safe if ambulances_json else '[]' }},
+        recentSOS: {{ emergencies_json | safe if emergencies_json else '[]' }},
+        archivedHospitals: {{ archived_hospitals_json | safe if archived_hospitals_json else '[]' }},
+        archivedAmbulances: {{ archived_ambulances_json | safe if archived_ambulances_json else '[]' }},
+
+        stats: {
+            pharmacies: {{ pharmacies_count or 0 }},
+            hospitals: {{ hospitals_count or 0 }},
+            medicines: {{ medicines_count or 0 }},
+            ambulances: {{ ambulances_count or 0 }}
+        },
+
+        tabs: [
+            { id: 'overview', name: 'Control Center', icon: 'fas fa-grid-2' },
+            { id: 'pharmacies', name: 'Pharmacy Network', icon: 'fas fa-store' },
+            { id: 'hospitals', name: 'Partner Hospitals', icon: 'fas fa-hospital' },
+            { id: 'medicines', name: 'Master Inventory', icon: 'fas fa-pills' },
+            { id: 'ambulances', name: 'Rescue Fleet', icon: 'fas fa-truck-medical' },
+            { id: 'sos', name: 'Emergency Feed', icon: 'fas fa-broadcast-tower' },
+            { id: 'admins', name: 'Access Control', icon: 'fas fa-user-shield' },
+            { id: 'alerts', name: 'Network Audit', icon: 'fas fa-clipboard-check' },
+            { id: 'archive', name: 'Archive Vault', icon: 'fas fa-box-archive' }
+        ],
+
+            init() {
+            const savedTab = localStorage.getItem('medlinkAdminTab');
+            if (savedTab) this.currentTab = savedTab;
+            this.$watch('currentTab', value => localStorage.setItem('medlinkAdminTab', value));
+        },
+
+                get pendingCount() { return (this.pharmacies || []).filter(p => !p.verified).length; },
+                get expiringCount() { return (this.medicines || []).filter(m => this.isNearExpiry(m.expiry)).length; },
+                get filteredPharmacies() {
+            const list = this.pharmacies || [];
+            if (!this.search) return list;
+            const q = this.search.toLowerCase();
+            return list.filter(p => (p.shop_name || '').toLowerCase().includes(q) || (p.dl_no || '').toLowerCase().includes(q));
+        },
+                get filteredMedicines() {
+            let list = this.medicines || [];
+            if (this.pharmacyFilterSnippet) list = list.filter(m => m.pharmacy_name === this.pharmacyFilterSnippet);
+            if (this.medicineSearch) {
+                const q = this.medicineSearch.toLowerCase();
+                list = list.filter(m => (m.name || '').toLowerCase().includes(q) || (m.pharmacy_name && m.pharmacy_name.toLowerCase().includes(q)));
+            }
+            return list;
+        },
+                get filteredSOS() { return this.recentSOS || []; },
+
+        isNearExpiry(date) {
+            if (!date) return false;
+            const diff = (new Date(date) - new Date()) / (1000 * 60 * 60 * 24);
+            return diff < 30;
+        },
+        viewPharmacyStock(name) { this.pharmacyFilterSnippet = name; this.medicineSearch = ''; this.currentTab = 'medicines'; },
+        openMap(lat, lng) { if (lat && lng) window.open(`https://www.google.com/maps?q=${lat},${lng}`, '_blank'); else alert('Location data not available.'); },
+
+                async verifyPharma(id) { try { if ((await fetch(`/admin/verify_pharmacy/${id}`)).ok) location.reload(); } catch (e) { console.error(e); }},
+                async deletePharma(id) { if (confirm('Permanently remove this pharmacy?')) { try { if ((await fetch(`/admin/reject_pharmacy/${id}`)).ok) location.reload(); } catch (e) { console.error(e); }} },
+                async deleteMedicine(id) { if (confirm('Remove this medicine?')) { try { if ((await fetch(`/admin/delete_medicine/${id}`)).ok) location.reload(); } catch (e) { console.error(e); }} },
+                async deleteAmbulance(id) { if (confirm('Archive this unit?')) { try { if ((await fetch(`/admin/delete_ambulance/${id}`)).ok) location.reload(); } catch (e) { console.error(e); }} },
+                async restoreAmbulance(id) { try { if ((await fetch(`/admin/restore_ambulance/${id}`)).ok) location.reload(); } catch (e) { console.error(e); }},
+
+        editHospital(h) { this.targetHosp = { ...h }; Alpine.store('modals').open('editHosp'); },
+        editAmbulance(a) { this.targetAmb = { ...a }; this.selectedHosp = a.hospital_id || ''; Alpine.store('modals').open('editAmb'); },
+
+                async deleteHospital(id) { if (confirm('Archive this hospital?')) { try { if ((await fetch(`/admin/delete_hospital/${id}`)).ok) location.reload(); } catch (e) { console.error(e); }} },
+                async restoreHospital(id) { try { if ((await fetch(`/admin/restore_hospital/${id}`)).ok) location.reload(); } catch (e) { console.error(e); }},
+                async deleteAdmin(id) { if (confirm('Revoke access?')) { try { if ((await fetch(`/admin/remove_sub_admin/${id}`)).ok) location.reload(); } catch (e) { console.error(e); }} },
+                async toggleSuspendAdmin(id) { if (confirm('Change suspension status?')) { try { if ((await fetch(`/admin/toggle_user_suspend/${id}`, { method: 'POST', headers: { 'X-CSRFToken': '{{ csrf_token() }}' }})).ok) location.reload(); } catch (e) { console.error(e); }} },
+                async toggleSuspendPharmacy(id) { if (confirm('Change suspension status?')) { try { if ((await fetch(`/admin/toggle_pharmacy_suspend/${id}`, { method: 'POST', headers: { 'X-CSRFToken': '{{ csrf_token() }}' }})).ok) location.reload(); } catch (e) { console.error(e); }} },
+                async resolveSOS(id) { try { if ((await fetch(`/admin/resolve_broadcast/${id}`, { method: 'POST', headers: { 'X-CSRFToken': '{{ csrf_token() }}' }})).ok) location.reload(); } catch (e) { console.error(e); }},
+        openAlertModal(pharma) { this.targetPharma = pharma || {}; this.alertMsg = ''; Alpine.store('modals').open('alert'); },
+
+                async submitAlert() {
+            if (!this.targetPharma.id) return;
+            try {
+                const res = await fetch('/admin/send_custom_alert', {
+                    method: 'POST', headers: { 'Content-Type': 'application/json', 'X-CSRFToken': '{{ csrf_token() }}' },
+                    body: JSON.stringify({ pharmacy_id: this.targetPharma.id, message: this.alertMsg, type: this.alertType })
+                });
+                if (res.ok) { Alpine.store('modals').close('alert'); alert('Alert sent.'); }
+            } catch (e) { console.error(e); }
+        },
+
+                async scanAndAlert() {
+            this.scanning = true; this.scanResults = [];
+            try {
+                const res = await fetch('/admin/scan_expiring_stock');
+                if (res.ok) this.scanResults = await res.json();
+                for (const m of this.scanResults) {
+                    await fetch('/admin/send_custom_alert', {
+                        method: 'POST', headers: { 'Content-Type': 'application/json', 'X-CSRFToken': '{{ csrf_token() }}' },
+                        body: JSON.stringify({ pharmacy_id: m.pharmacy_id, message: `URGENT: ${m.name} is expiring soon.`, type: 'danger' })
+                    });
+                }
+                alert('Broadcast complete.');
+            } catch (e) { console.error(e); } finally { this.scanning = false; }
+        }
+            }));
+        });
+    </script>
 
 </body>
 
