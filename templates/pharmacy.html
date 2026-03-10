@@ -183,7 +183,7 @@
                 <div class="flex justify-between items-center mb-6">
                     <h2 class="text-xl font-black text-slate-900 flex items-center gap-3">
                         <i class="fas fa-tower-broadcast text-red-500 animate-pulse"></i>
-                        Emergency Broadcasts <span class="text-xs font-bold text-red-400">(Within 5km)</span>
+                        Emergency Broadcasts <span class="text-xs font-bold text-red-400">(Within 10km)</span>
                     </h2>
                 </div>
 
@@ -192,17 +192,27 @@
                         <div
                             class="p-6 bg-white rounded-3xl border border-red-50 hover:border-red-200 transition-all flex flex-col md:flex-row justify-between items-center gap-4">
                             <div>
-                                <h4 class="font-bold text-slate-900 text-lg" x-text="sos.med"></h4>
-                                <p class="text-[10px] font-black text-slate-400 uppercase tracking-widest mt-1"
-                                    x-text="(sos.dist || 'Nearby') + ' • ' + (sos.time || 'Just Now')"></p>
+                                <h4 class="font-bold text-slate-900 text-lg" x-text="sos.medicine"></h4>
+                                <p class="text-[10px] font-black text-slate-400 uppercase tracking-widest mt-1">
+                                    <span x-text="sos.patient_name"></span> •
+                                    <span x-text="sos.distance ? (sos.distance + ' km away') : 'Nearby'"></span> •
+                                    <span x-text="sos.time_ago"></span>
+                                </p>
                             </div>
-                            <a :href="'https://wa.me/' + sos.phone + '?text=Responding to your MedLink SOS for ' + sos.med"
-                                target="_blank"
-                                class="flex items-center gap-2 px-6 py-3 bg-green-500 text-white rounded-2xl text-[10px] font-black uppercase tracking-widest hover:bg-green-600 shadow-lg shadow-green-500/20 transition-all">
-                                <i class="fab fa-whatsapp text-lg"></i> Respond via WhatsApp
-                            </a>
+                            <template x-if="sos.patient_phone">
+                                <a :href="'https://wa.me/' + sos.patient_phone + '?text=Responding to your MedLink SOS for ' + sos.medicine"
+                                    target="_blank"
+                                    class="flex items-center gap-2 px-6 py-3 bg-green-500 text-white rounded-2xl text-[10px] font-black uppercase tracking-widest hover:bg-green-600 shadow-lg shadow-green-500/20 transition-all">
+                                    <i class="fab fa-whatsapp text-lg"></i> Respond via WhatsApp
+                                </a>
+                            </template>
                         </div>
                     </template>
+                    <div x-show="emergencies.length === 0" class="text-center py-10">
+                        <i class="fas fa-check-circle text-teal-100 text-5xl mb-4"></i>
+                        <p class="text-slate-400 text-xs font-bold uppercase tracking-widest">No nearby emergencies at
+                            the moment</p>
+                    </div>
                 </div>
             </div>
 
@@ -292,6 +302,20 @@
 
                 init() {
                     console.log('Pharmacy Terminal Live');
+                    // Start polling for SOS updates every 30 seconds
+                    this.fetchNearbySOS();
+                    setInterval(() => this.fetchNearbySOS(), 30000);
+                },
+
+                async fetchNearbySOS() {
+                    try {
+                        const response = await fetch('/pharmacy/nearby_sos');
+                        if (response.ok) {
+                            this.emergencies = await response.json();
+                        }
+                    } catch (error) {
+                        console.error('Error fetching nearby SOS:', error);
+                    }
                 },
 
                 async replyToReview(reviewId, reply) {

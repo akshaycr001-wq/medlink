@@ -1009,6 +1009,48 @@ def pharmacy_dashboard():
                            emergencies_json=emergencies_json,
                            alternatives_json=alternatives_json)
 
+@app.route('/pharmacy/nearby_sos')
+@login_required
+def pharmacy_nearby_sos():
+    """Return SOS requests within 10km of this pharmacy's location."""
+    if current_user.role != 'pharmacy':
+        return jsonify({'error': 'Unauthorized'}), 403
+
+    pharmacy = Pharmacy.query.filter_by(user_id=current_user.id).first()
+    if not pharmacy:
+        return jsonify([])
+
+    p_lat = pharmacy.latitude
+    p_lng = pharmacy.longitude
+
+    # Fetch all open SOS, ordered by most recent first
+    all_sos = SOS.query.filter_by(status='open').order_by(SOS.created_at.desc()).all()
+
+    nearby = []
+    for s in all_sos:
+        distance = None
+        if p_lat and p_lng and s.latitude and s.longitude:
+            distance = round(haversine(p_lat, p_lng, s.latitude, s.longitude), 2)
+            if distance > 10.0:   # 10km radius filter
+                continue
+
+        # Include patient contact if available
+        patient = s.patient
+        nearby.append({
+            'id': s.id,
+            'medicine': s.medicine_name,
+            'patient_name': patient.name if patient else 'Anonymous',
+            'patient_phone': patient.phone if patient and patient.phone else None,
+            'distance': distance,
+            'time_ago': s.created_at.strftime('%I:%M %p, %d %b'),
+            'status': s.status,
+            'latitude': s.latitude,
+            'longitude': s.longitude,
+        })
+
+    return jsonify(nearby)
+
+
 @app.route('/pharmacy/add_stock', methods=['POST'])
 @csrf.exempt
 @login_required
