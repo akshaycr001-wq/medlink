@@ -1134,7 +1134,7 @@ def add_stock():
         
     try:
         expiry = datetime.strptime(expiry_str, '%Y-%m-%d').date()
-        qty = int(qty_str) if qty_str else 0
+        qty = int(float(qty_str)) if qty_str else 0
         price = float(price_str) if price_str and str(price_str).strip() else None
         
         # Add stock entry

@@ -354,7 +354,10 @@
                 },
 
                 async addStock() {
-                    if (!this.form.name || !this.form.expiry) return;
+                    if (!this.form.name || !this.form.expiry) {
+                        alert('Please enter Medicine Name and Expiry Date');
+                        return;
+                    }
                     try {
                         const response = await fetch('/pharmacy/add_stock', {
                             method: 'POST',
@@ -364,8 +367,26 @@
                             },
                             body: JSON.stringify(this.form)
                         });
-                        if (response.ok) { window.location.reload(); }
-                    } catch (error) { alert('Error adding stock'); }
+                        const contentType = response.headers.get('content-type') || '';
+                        if (contentType.includes('application/json')) {
+                            const data = await response.json();
+                            if (data.success) {
+                                window.location.reload();
+                            } else {
+                                alert('Error: ' + (data.error || 'Failed to add stock'));
+                            }
+                        } else {
+                            // If not JSON, we likely got redirected to login
+                            if (response.ok) {
+                                window.location.reload();
+                            } else {
+                                alert('Server error (' + response.status + '). Please try again.');
+                            }
+                        }
+                    } catch (error) {
+                        console.error('addStock error:', error);
+                        alert('Network error: ' + error.message);
+                    }
                 },
 
                 async removeStock(id) {
