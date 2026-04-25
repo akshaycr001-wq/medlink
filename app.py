@@ -75,6 +75,28 @@ def geocode_location(name, address):
 # Create Flask app
 app = Flask(__name__)
 
+@app.before_request
+def auto_seed_db():
+    if not getattr(app, '_database_seeded', False):
+        try:
+            from models import db, User
+            # If no admin exists, create one automatically
+            if not User.query.filter_by(role='admin').first():
+                from werkzeug.security import generate_password_hash
+                admin = User(
+                    username='admin',
+                    email='admin@medlink.com',
+                    password_hash=generate_password_hash('admin123', method='pbkdf2:sha256'),
+                    role='admin',
+                    is_verified=True
+                )
+                db.session.add(admin)
+                db.session.commit()
+                print("Auto-seeded admin account.")
+            app._database_seeded = True
+        except Exception as e:
+            print("Auto-seed error:", e)
+
 # Load configuration based on environment
 env = os.environ.get('FLASK_ENV', 'development')
 app.config.from_object(config[env])
