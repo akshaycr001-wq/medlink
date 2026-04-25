@@ -641,32 +641,6 @@ def admin_dashboard():
                            hospitals_count=len(hospitals),
                            sub_admins=sub_admins)
 
-@app.route('/admin/restore_test_data', methods=['GET', 'POST'])
-@login_required
-def restore_test_data():
-    if current_user.role != 'admin':
-        return "Access Denied", 403
-    try:
-        # We wrap in app.app_context just in case, though we are in a request context
-        with app.app_context():
-            print("Beginning test data restoration...")
-            # Execute hospital seed
-            import seed_hospitals_real
-            seed_hospitals_real.seed_hospitals()
-            
-            # Execute alternatives seed
-            import seed_massive_alternatives
-            seed_massive_alternatives.seed_alternatives()
-            
-            # Note: We skip 'add_test_data' script if it overlaps or we don't have its exact function, 
-            # to be safe from crashing. The user specifically asked for alternatives.
-            
-        flash('Test Data (Hospitals, Pharmacies, Medicines, Alternatives) has been successfully restored!', 'success')
-    except Exception as e:
-        flash(f'Error restoring data: {str(e)}', 'error')
-    
-    return redirect(url_for('admin_dashboard'))
-
 @app.route('/admin/add_hospital_submit', methods=['POST'])
 @login_required
 def add_hospital_submit():
