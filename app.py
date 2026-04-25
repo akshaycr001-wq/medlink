@@ -156,8 +156,20 @@ def send_otp():
     return jsonify({'message': 'OTP sent successfully'})
 
 # Security headers (only enforce HTTPS in production)
+csp = {
+    'default-src': ["'self'", "'unsafe-inline'"],
+    'script-src': ["'self'", "'unsafe-inline'", "'unsafe-eval'", 
+                   "https://cdn.tailwindcss.com", "https://cdnjs.cloudflare.com",
+                   "https://cdn.jsdelivr.net", "https://unpkg.com"],
+    'style-src': ["'self'", "'unsafe-inline'", 
+                  "https://cdnjs.cloudflare.com", "https://fonts.googleapis.com",
+                  "https://cdn.tailwindcss.com", "https://cdn.jsdelivr.net"],
+    'font-src': ["'self'", "https://fonts.gstatic.com", "https://cdnjs.cloudflare.com"],
+    'img-src': ["'self'", "data:", "https:"],
+    'connect-src': ["'self'", "https:"],
+}
 if env == 'production':
-    Talisman(app, force_https=True, strict_transport_security=True)
+    Talisman(app, force_https=True, strict_transport_security=True, content_security_policy=csp)
 else:
     # In development, use Talisman but don't force HTTPS
     Talisman(app, force_https=False, content_security_policy=None)
