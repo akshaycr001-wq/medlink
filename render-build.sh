@@ -5,8 +5,5 @@ set -o errexit
 pip install -r requirements.txt
 
 # Database initialization
-if [ ! -d "migrations" ]; then
-    flask db init
-fi
-flask db migrate -m "Auto migration" || true
-flask db upgrade
+python -c "from app import app, db; app.app_context().push(); db.create_all()"
+
