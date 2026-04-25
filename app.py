@@ -78,10 +78,11 @@ app = Flask(__name__)
 @app.before_request
 def auto_seed_db():
     if not getattr(app, '_database_seeded', False):
-        from models import db, User
-        # If no admin exists, create one automatically
+        from models import db, User, Hospital, MedicineAlternative
+        from werkzeug.security import generate_password_hash
+        
+        # 1. Ensure Admin exists
         if not User.query.filter_by(role='admin').first():
-            from werkzeug.security import generate_password_hash
             admin = User(
                 name='System Admin',
                 username='admin',
@@ -92,7 +93,31 @@ def auto_seed_db():
             )
             db.session.add(admin)
             db.session.commit()
-            print("Auto-seeded admin account successfully.")
+            print("Auto-seeded admin account.")
+
+        # 2. Ensure Test Data (Pharmacies, Hospitals, Alternatives)
+        try:
+            # Seed Hospitals if empty
+            if Hospital.query.count() == 0:
+                import seed_hospitals_real
+                seed_hospitals_real.seed_hospitals()
+                print("Auto-seeded internal hospital list.")
+
+            # Seed Test Pharmacy & Medicines if empty
+            if User.query.filter_by(username='testpharmacy').first() is None:
+                import add_test_data
+                add_test_data.add_test_data()
+                print("Auto-seeded test pharmacy account.")
+
+            # Seed Alternatives if empty or low
+            if MedicineAlternative.query.count() < 10:
+                import seed_massive_alternatives
+                seed_massive_alternatives.seed_alternatives()
+                print("Auto-seeded medicine alternatives map.")
+
+        except Exception as e:
+            print(f"Non-critical seed error: {e}")
+
         app._database_seeded = True
 
 # Load configuration based on environment
