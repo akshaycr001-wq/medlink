@@ -84,9 +84,10 @@ def auto_seed_db():
             if not User.query.filter_by(role='admin').first():
                 from werkzeug.security import generate_password_hash
                 admin = User(
+                    name='System Admin',
                     username='admin',
                     email='admin@medlink.com',
-                    password_hash=generate_password_hash('admin123', method='pbkdf2:sha256'),
+                    password=generate_password_hash('admin123', method='pbkdf2:sha256'),
                     role='admin',
                     is_verified=True
                 )
