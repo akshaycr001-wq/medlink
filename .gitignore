@@ -34,3 +34,7 @@ static/uploads/*
 # OS
 .DS_Store
 Thumbs.db
+
+# Logs and Executables
+*.log
+*.exe

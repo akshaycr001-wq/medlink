@@ -4,9 +4,9 @@ set -o errexit
 
 pip install -r requirements.txt
 
-# Database initialization (Uncomment if you want to automate the first-time setup)
-# if [ ! -d "migrations" ]; then
-#     flask db init
-#     flask db migrate -m "Initial migration"
-#     flask db upgrade
-# fi
+# Database initialization
+if [ ! -d "migrations" ]; then
+    flask db init
+fi
+flask db migrate -m "Auto migration" || true
+flask db upgrade

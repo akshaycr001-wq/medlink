@@ -12,3 +12,4 @@ email-validator
 flask-migrate
 flask-mail
 apscheduler
+SQLAlchemy
