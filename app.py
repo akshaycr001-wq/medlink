@@ -840,6 +840,7 @@ def view_license(id):
         return "No document found"
     return send_from_directory(app.config['UPLOAD_FOLDER'], pharma.license_doc)
 
+
 @app.route('/admin/add_sub_admin', methods=['POST'])
 @login_required
 def add_sub_admin():
@@ -974,7 +975,9 @@ def resolve_broadcast(id):
     return redirect(url_for('admin_dashboard'))
 
 @app.route('/admin/send_alert', methods=['POST'])
+@app.route('/admin/send_custom_alert', methods=['POST'])
 @login_required
+@csrf.exempt
 def admin_send_alert():
     if current_user.role not in ['admin', 'sub_admin']:
         return jsonify({'error': 'Unauthorized'}), 403
@@ -994,7 +997,7 @@ def admin_send_alert():
     )
     db.session.add(new_alert)
     db.session.commit()
-    return jsonify({'success': True})
+    return jsonify({'success': True, 'status': 'success', 'message': 'Alert sent successfully'})
 
 @app.route('/admin/toggle_user_suspend/<int:id>', methods=['POST'])
 @login_required
