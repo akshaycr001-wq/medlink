@@ -98,11 +98,17 @@
                         <p class="text-[9px] font-bold text-slate-400 uppercase" x-text="adminRole || 'Sub-Admin'"></p>
                     </div>
                 </div>
-                <a href="/logout"
-                    class="block w-full py-3 bg-white border border-slate-200 text-slate-600 rounded-xl text-center text-[10px] font-black uppercase tracking-widest hover:text-red-500 hover:border-red-200 hover:bg-red-50 transition-all">
-                    Sign Out
-                </a>
             </div>
+            <a href="{{ url_for('restore_test_data') }}"
+                onclick="return confirm('This will load all test Hospitals, Pharmacies, and Medicines into the live database. Are you sure?');"
+                class="block w-full py-2 mb-2 bg-amber-50 border border-amber-200 text-amber-600 rounded-xl text-center text-[10px] font-black uppercase tracking-widest hover:text-white hover:bg-amber-500 transition-all">
+                Restore Test Data
+            </a>
+            <a href="/logout"
+                class="block w-full py-2 bg-white border border-slate-200 text-slate-600 rounded-xl text-center text-[10px] font-black uppercase tracking-widest hover:text-red-500 hover:border-red-200 hover:bg-red-50 transition-all">
+                Sign Out
+            </a>
+        </div>
         </div>
     </aside>
 
@@ -1061,19 +1067,19 @@
             alertMsg: '', alertType: 'info', scanning: false, scanResults: [],
 
             pharmacies: {{ pharmacies_json | safe if pharmacies_json else '[]' }},
-        subAdmins: {{ sub_admins_json | safe if sub_admins_json else '[]' }},
-        hospitals: {{ hospitals_json | safe if hospitals_json else '[]' }},
-        medicines: {{ medicines_json | safe if medicines_json else '[]' }},
-        ambulances: {{ ambulances_json | safe if ambulances_json else '[]' }},
-        recentSOS: {{ emergencies_json | safe if emergencies_json else '[]' }},
-        archivedHospitals: {{ archived_hospitals_json | safe if archived_hospitals_json else '[]' }},
-        archivedAmbulances: {{ archived_ambulances_json | safe if archived_ambulances_json else '[]' }},
+        subAdmins: { { sub_admins_json | safe if sub_admins_json else '[]' } },
+        hospitals: { { hospitals_json | safe if hospitals_json else '[]' } },
+        medicines: { { medicines_json | safe if medicines_json else '[]' } },
+        ambulances: { { ambulances_json | safe if ambulances_json else '[]' } },
+        recentSOS: { { emergencies_json | safe if emergencies_json else '[]' } },
+        archivedHospitals: { { archived_hospitals_json | safe if archived_hospitals_json else '[]' } },
+        archivedAmbulances: { { archived_ambulances_json | safe if archived_ambulances_json else '[]' } },
 
         stats: {
-            pharmacies: {{ pharmacies_count or 0 }},
-            hospitals: {{ hospitals_count or 0 }},
-            medicines: {{ medicines_count or 0 }},
-            ambulances: {{ ambulances_count or 0 }}
+            pharmacies: { { pharmacies_count or 0 } },
+            hospitals: { { hospitals_count or 0 } },
+            medicines: { { medicines_count or 0 } },
+            ambulances: { { ambulances_count or 0 } }
         },
 
         tabs: [
@@ -1121,21 +1127,21 @@
         viewPharmacyStock(name) { this.pharmacyFilterSnippet = name; this.medicineSearch = ''; this.currentTab = 'medicines'; },
         openMap(lat, lng) { if (lat && lng) window.open(`https://www.google.com/maps?q=${lat},${lng}`, '_blank'); else alert('Location data not available.'); },
 
-                async verifyPharma(id) { try { if ((await fetch(`/admin/verify_pharmacy/${id}`)).ok) location.reload(); } catch (e) { console.error(e); }},
-                async deletePharma(id) { if (confirm('Permanently remove this pharmacy?')) { try { if ((await fetch(`/admin/reject_pharmacy/${id}`)).ok) location.reload(); } catch (e) { console.error(e); }} },
-                async deleteMedicine(id) { if (confirm('Remove this medicine?')) { try { if ((await fetch(`/admin/delete_medicine/${id}`)).ok) location.reload(); } catch (e) { console.error(e); }} },
-                async deleteAmbulance(id) { if (confirm('Archive this unit?')) { try { if ((await fetch(`/admin/delete_ambulance/${id}`)).ok) location.reload(); } catch (e) { console.error(e); }} },
-                async restoreAmbulance(id) { try { if ((await fetch(`/admin/restore_ambulance/${id}`)).ok) location.reload(); } catch (e) { console.error(e); }},
+                async verifyPharma(id) { try { if ((await fetch(`/admin/verify_pharmacy/${id}`)).ok) location.reload(); } catch (e) { console.error(e); } },
+                async deletePharma(id) { if (confirm('Permanently remove this pharmacy?')) { try { if ((await fetch(`/admin/reject_pharmacy/${id}`)).ok) location.reload(); } catch (e) { console.error(e); } } },
+                async deleteMedicine(id) { if (confirm('Remove this medicine?')) { try { if ((await fetch(`/admin/delete_medicine/${id}`)).ok) location.reload(); } catch (e) { console.error(e); } } },
+                async deleteAmbulance(id) { if (confirm('Archive this unit?')) { try { if ((await fetch(`/admin/delete_ambulance/${id}`)).ok) location.reload(); } catch (e) { console.error(e); } } },
+                async restoreAmbulance(id) { try { if ((await fetch(`/admin/restore_ambulance/${id}`)).ok) location.reload(); } catch (e) { console.error(e); } },
 
         editHospital(h) { this.targetHosp = { ...h }; Alpine.store('modals').open('editHosp'); },
         editAmbulance(a) { this.targetAmb = { ...a }; this.selectedHosp = a.hospital_id || ''; Alpine.store('modals').open('editAmb'); },
 
-                async deleteHospital(id) { if (confirm('Archive this hospital?')) { try { if ((await fetch(`/admin/delete_hospital/${id}`)).ok) location.reload(); } catch (e) { console.error(e); }} },
-                async restoreHospital(id) { try { if ((await fetch(`/admin/restore_hospital/${id}`)).ok) location.reload(); } catch (e) { console.error(e); }},
-                async deleteAdmin(id) { if (confirm('Revoke access?')) { try { if ((await fetch(`/admin/remove_sub_admin/${id}`)).ok) location.reload(); } catch (e) { console.error(e); }} },
-                async toggleSuspendAdmin(id) { if (confirm('Change suspension status?')) { try { if ((await fetch(`/admin/toggle_user_suspend/${id}`, { method: 'POST', headers: { 'X-CSRFToken': '{{ csrf_token() }}' }})).ok) location.reload(); } catch (e) { console.error(e); }} },
-                async toggleSuspendPharmacy(id) { if (confirm('Change suspension status?')) { try { if ((await fetch(`/admin/toggle_pharmacy_suspend/${id}`, { method: 'POST', headers: { 'X-CSRFToken': '{{ csrf_token() }}' }})).ok) location.reload(); } catch (e) { console.error(e); }} },
-                async resolveSOS(id) { try { if ((await fetch(`/admin/resolve_broadcast/${id}`, { method: 'POST', headers: { 'X-CSRFToken': '{{ csrf_token() }}' }})).ok) location.reload(); } catch (e) { console.error(e); }},
+                async deleteHospital(id) { if (confirm('Archive this hospital?')) { try { if ((await fetch(`/admin/delete_hospital/${id}`)).ok) location.reload(); } catch (e) { console.error(e); } } },
+                async restoreHospital(id) { try { if ((await fetch(`/admin/restore_hospital/${id}`)).ok) location.reload(); } catch (e) { console.error(e); } },
+                async deleteAdmin(id) { if (confirm('Revoke access?')) { try { if ((await fetch(`/admin/remove_sub_admin/${id}`)).ok) location.reload(); } catch (e) { console.error(e); } } },
+                async toggleSuspendAdmin(id) { if (confirm('Change suspension status?')) { try { if ((await fetch(`/admin/toggle_user_suspend/${id}`, { method: 'POST', headers: { 'X-CSRFToken': '{{ csrf_token() }}' } })).ok) location.reload(); } catch (e) { console.error(e); } } },
+                async toggleSuspendPharmacy(id) { if (confirm('Change suspension status?')) { try { if ((await fetch(`/admin/toggle_pharmacy_suspend/${id}`, { method: 'POST', headers: { 'X-CSRFToken': '{{ csrf_token() }}' } })).ok) location.reload(); } catch (e) { console.error(e); } } },
+                async resolveSOS(id) { try { if ((await fetch(`/admin/resolve_broadcast/${id}`, { method: 'POST', headers: { 'X-CSRFToken': '{{ csrf_token() }}' } })).ok) location.reload(); } catch (e) { console.error(e); } },
         openAlertModal(pharma) { this.targetPharma = pharma || {}; this.alertMsg = ''; Alpine.store('modals').open('alert'); },
 
                 async submitAlert() {
