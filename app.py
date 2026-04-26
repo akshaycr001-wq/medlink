@@ -267,9 +267,9 @@ def index():
 @limiter.limit("5 per minute")  # Rate limit login attempts
 def login():
     if request.method == 'POST':
-        identifier = (request.form.get('identifier') or '').strip()
+        identifier = (request.form.get('identifier') or '').strip().lower()
         password = request.form.get('password')
-        user = User.query.filter(or_(User.username == identifier, User.email == identifier)).first()
+        user = User.query.filter(or_(func.lower(User.username) == identifier, func.lower(User.email) == identifier)).first()
         
         if not user:
             print(f"DEBUG: Login failed - Account not found for identifier: {identifier}")
@@ -436,12 +436,9 @@ def verify_email(token):
 @limiter.limit("3 per minute")  # Stricter rate limit for admin login
 def admin_login():
     if request.method == 'POST':
-        username = (request.form.get('username') or '').strip()
+        username = (request.form.get('username') or '').strip().lower()
         password = request.form.get('password')
-        user = User.query.filter_by(username=username).first()
-        
-        if not user:
-            print(f"DEBUG: Admin login failed - Account not found for identifier: {username}")
+        user = User.query.filter(func.lower(User.username) == username).first()
         
         if user:
             if check_password_hash(user.password, password.strip()):
@@ -461,6 +458,17 @@ def admin_login():
             flash('Admin ID not found')
             
     return render_template('admin_login.html')
+
+@app.route('/emergency_rescue_homeo')
+def emergency_rescue():
+    # TEMPORARY: Reset homeonellad password to solve reset loop
+    user = User.query.filter_by(username='pharm48848@gmail.com').first()
+    if user:
+        user.password = generate_password_hash('Medlink123', method='pbkdf2:sha256')
+        user.email_verified = True
+        db.session.commit()
+        return "SUCCESS: Password for homeonellad has been reset to 'Medlink123'. Please log in now."
+    return "User homeonellad not found."
 
 @app.route('/register', methods=['GET', 'POST'])
 def register():
