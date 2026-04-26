@@ -272,7 +272,8 @@ def login():
         user = User.query.filter(or_(User.username == identifier, User.email == identifier)).first()
         
         if user:
-            if check_password_hash(user.password, password):
+            # Strip whitespace to avoid common login issues
+            if check_password_hash(user.password, password.strip()):
                 if user.role in ['admin', 'sub_admin']:
                     flash('Please use the Admin Portal', 'error')
                     return redirect(url_for('admin_login'))
@@ -400,7 +401,8 @@ def reset_password():
         
     user = User.query.get(token_data['user_id'])
     if user:
-        user.password = generate_password_hash(password, method='scrypt')
+        # Strip whitespace and use a more universally compatible hashing method
+        user.password = generate_password_hash(password.strip(), method='pbkdf2:sha256')
         db.session.commit()
         _reset_tokens.pop(token, None)
         session.pop('reset_active', None)
@@ -434,7 +436,7 @@ def admin_login():
         user = User.query.filter_by(username=username).first()
         
         if user:
-            if check_password_hash(user.password, password):
+            if check_password_hash(user.password, password.strip()):
                 if user.role not in ['admin', 'sub_admin']:
                     flash('Access Denied: Admins Only')
                     return redirect(url_for('login'))
@@ -492,7 +494,7 @@ def register():
         session['pending_registration'] = {
             'username': username,
             'email': email,
-            'password': generate_password_hash(password, method='scrypt'),
+            'password': generate_password_hash(password.strip(), method='pbkdf2:sha256'),
             'role': role,
             'phone': phone,
             'shop_name': request.form.get('shop_name'),
