@@ -43,31 +43,40 @@ def add_test_data():
             test_pharmacy = Pharmacy.query.filter_by(user_id=test_pharmacy_user.id).first()
             print(f"Using existing test pharmacy: {test_pharmacy.shop_name}")
         
-        # Add test medicines (alternatives but NOT the brand names)
+        # Add test medicines to both testpharmacy and homeonellad
+        target_pharmacies = [test_pharmacy]
+        homeo_user = User.query.filter_by(username='pharm48848@gmail.com').first()
+        if homeo_user:
+            homeo_pharma = Pharmacy.query.filter_by(user_id=homeo_user.id).first()
+            if homeo_pharma:
+                target_pharmacies.append(homeo_pharma)
+
         test_medicines = [
             ('Paracetamol', 50, 10.00),  # Alternative for Dolo, Crocin, Calpol
             ('Aspirin', 30, 15.00),      # Alternative for Disprin, Ecosprin
             ('Ibuprofen', 40, 20.00),    # Alternative for Brufen, Combiflam
             ('Diclofenac', 25, 25.00),   # Alternative for Voveran, Volini
+            ('Omeprazole', 100, 12.00),  # Common antacid
+            ('Azithromycin', 20, 120.00),# Antibiotic
         ]
         
-        for med_name, qty, price in test_medicines:
-            # Check if medicine already exists
-            existing = Medicine.query.filter_by(
-                pharmacy_id=test_pharmacy.id,
-                name=med_name
-            ).first()
-            
-            if not existing:
-                medicine = Medicine(
-                    pharmacy_id=test_pharmacy.id,
-                    name=med_name,
-                    qty=qty,
-                    price=price,
-                    expiry=(datetime.now() + timedelta(days=365)).date()
-                )
-                db.session.add(medicine)
-                print(f"  Added: {med_name} (Qty: {qty}, Price: Rs.{price})")
+        for p in target_pharmacies:
+            print(f"  Seeding inventory for: {p.shop_name}")
+            for med_name, qty, price in test_medicines:
+                existing = Medicine.query.filter_by(
+                    pharmacy_id=p.id,
+                    name=med_name
+                ).first()
+                if not existing:
+                    medicine = Medicine(
+                        pharmacy_id=p.id,
+                        name=med_name,
+                        qty=qty,
+                        price=price,
+                        expiry=(datetime.now() + timedelta(days=365)).date()
+                    )
+                    db.session.add(medicine)
+                    print(f"    - Added: {med_name}")
         
         db.session.commit()
         
