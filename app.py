@@ -462,13 +462,33 @@ def admin_login():
 
 @app.route('/emergency_rescue_homeo')
 def emergency_rescue():
-    # TEMPORARY: Reset homeonellad password to solve reset loop
-    user = User.query.filter_by(username='pharm48848@gmail.com').first()
-    if user:
-        user.password = generate_password_hash('Medlink123', method='pbkdf2:sha256')
-        user.email_verified = True
+    # 1. Clear collisions: Find ALL accounts with this email
+    email_target = 'pharm48848@gmail.com'
+    all_users = User.query.filter(func.lower(User.email) == email_target.lower()).all()
+    
+    # 2. Identify the 'main' pharmacy account (likely the one with pharmacy role)
+    main_pharma = None
+    for u in all_users:
+        if u.role == 'pharmacy':
+            main_pharma = u
+            break
+            
+    if not main_pharma and all_users:
+        main_pharma = all_users[0] # Fallback to first one
+        
+    if main_pharma:
+        # Rename others to avoid collision
+        for u in all_users:
+            if u.id != main_pharma.id:
+                u.email = f"old_{u.id}_{u.email}"
+                u.username = f"old_{u.id}_{u.username}"
+        
+        # Reset the main one
+        main_pharma.password = generate_password_hash('Medlink123', method='pbkdf2:sha256')
+        main_pharma.email_verified = True
         db.session.commit()
-        return "SUCCESS: Password for homeonellad has been reset to 'Medlink123'. Please log in now."
+        return f"SUCCESS: Account '{main_pharma.username}' restored. Use pharmacy login with password 'Medlink123'. (Renamed {len(all_users)-1} colliding accounts)"
+        
     return "User homeonellad not found."
 
 @app.route('/admin/restore_data')
@@ -528,9 +548,9 @@ def register():
             flash('Password must be at least 8 characters long')
             return redirect(url_for('register'))
 
-        # 3. Existing Username Check
-        if User.query.filter_by(username=username).first():
-            flash('Username already exists')
+        # 3. Existing User Check
+        if User.query.filter((func.lower(User.username) == username.lower()) | (func.lower(User.email) == email.lower())).first():
+            flash('Username or Email already exists')
             return redirect(url_for('register'))
             
         # 4. Handle Optional License Upload
