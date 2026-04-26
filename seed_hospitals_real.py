@@ -50,21 +50,28 @@ hospitals_data = [
 
 def seed_hospitals():
     with app.app_context():
+        print("Starting hospital and ambulance seeding...")
         for h in hospitals_data:
             existing = Hospital.query.filter_by(name=h['name']).first()
             if existing:
-                # Update existing to fix data rather than skip
+                # Update existing data to ensure it's correct
+                existing.address = h['address']
+                existing.phone = h['phone']
                 existing.driver_no = h['emergency']
                 db.session.commit()
-                print(f"Updated emergency number for {h['name']}")
-                # Also update their ambulance record
+                print(f"Updated {h['name']}")
+                
+                # Update or Add ambulance
                 amb = Ambulance.query.filter_by(hospital_id=existing.id).first()
-                if amb:
-                    amb.driver_phone = h['emergency']
-                    db.session.commit()
+                if not amb:
+                    amb = Ambulance(vehicle_number=h['amb'], hospital_id=existing.id)
+                    db.session.add(amb)
+                amb.driver_phone = h['emergency']
+                amb.address = h['address']
+                db.session.commit()
                 continue
                 
-            print(f"Geocoding {h['name']}...")
+            print(f"Geocoding {h['name']} for new entry...")
             lat, lon = geocode_location(h['name'], h['address'])
             
             new_hosp = Hospital(
@@ -72,62 +79,22 @@ def seed_hospitals():
                 address=h['address'],
                 phone=h['phone'],
                 ambulance_no=h['amb'],
-                driver_no=h['emergency'],  # Use distinct emergency line
+                driver_no=h['emergency'],
                 latitude=lat,
                 longitude=lon
             )
             db.session.add(new_hosp)
             db.session.commit()
             
-            # Add to ambulance fleet as well
             new_amb = Ambulance(
                 vehicle_number=h['amb'],
-                driver_phone=h['emergency'],  # Use distinct emergency line
+                driver_phone=h['emergency'],
                 hospital_id=new_hosp.id,
                 address=h['address']
             )
             db.session.add(new_amb)
             db.session.commit()
-            
-            print(f"Added {h['name']} at ({lat}, {lon})")
-
-def seed_hospitals():
-    with app.app_context():
-        # Clear existing hospitals to avoid duplicates for this seed
-        # Hospital.query.delete() # Deleting might break relationships if not careful, better to check by name
-        
-        for h in hospitals_data:
-            existing = Hospital.query.filter_by(name=h['name']).first()
-            if existing:
-                print(f"Skipping {h['name']} - already exists")
-                continue
-                
-            print(f"Geocoding {h['name']}...")
-            lat, lon = geocode_location(h['name'], h['address'])
-            
-            new_hosp = Hospital(
-                name=h['name'],
-                address=h['address'],
-                phone=h['phone'],
-                ambulance_no=h['amb'],
-                driver_no=h['phone'], # Using hospital phone as dispatch
-                latitude=lat,
-                longitude=lon
-            )
-            db.session.add(new_hosp)
-            db.session.commit()
-            
-            # Add to ambulance fleet as well
-            new_amb = Ambulance(
-                vehicle_number=h['amb'],
-                driver_phone=h['phone'],
-                hospital_id=new_hosp.id,
-                address=h['address']
-            )
-            db.session.add(new_amb)
-            db.session.commit()
-            
-            print(f"Added {h['name']} at ({lat}, {lon})")
+            print(f"Added {h['name']}")
 
 if __name__ == "__main__":
     seed_hospitals()

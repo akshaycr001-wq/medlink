@@ -470,6 +470,39 @@ def emergency_rescue():
         return "SUCCESS: Password for homeonellad has been reset to 'Medlink123'. Please log in now."
     return "User homeonellad not found."
 
+@app.route('/admin/restore_data')
+@login_required
+def restore_data():
+    if current_user.role != 'admin':
+        return "Access Denied", 403
+        
+    try:
+        import seed_hospitals_real
+        import seed_massive_alternatives
+        import add_test_data
+        
+        print("Starting manual data restoration...")
+        seed_hospitals_real.seed_hospitals()
+        seed_massive_alternatives.seed_alternatives()
+        
+        # Also ensure test pharmacy exists
+        if User.query.filter_by(username='testpharmacy').first() is None:
+            add_test_data.add_test_data()
+            
+        return "SUCCESS: All core data (Hospitals, Ambulances, Alternatives, Test Data) has been restored/updated."
+    except Exception as e:
+        return f"Restore Error: {e}", 500
+        seed_hospitals_real.seed_hospitals()
+        seed_massive_alternatives.seed_alternatives()
+        
+        # Also ensure test pharmacy exists
+        if User.query.filter_by(username='testpharmacy').first() is None:
+            add_test_data.add_test_data()
+            
+        return "SUCCESS: All core data (Hospitals, Ambulances, Alternatives, Test Data) has been restored/updated."
+    except Exception as e:
+        return f"Restore Error: {e}", 500
+
 @app.route('/register', methods=['GET', 'POST'])
 def register():
     if request.method == 'POST':
