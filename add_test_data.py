@@ -33,6 +33,7 @@ def add_test_data():
                 location_address='Test Location',
                 latitude=12.9716,
                 longitude=77.5946,
+                license_doc='placeholder_license.png',
                 verified=True
             )
             db.session.add(test_pharmacy)

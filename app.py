@@ -1,4 +1,5 @@
 from flask import Flask, render_template, request, redirect, url_for, flash, session, jsonify, send_from_directory
+from werkzeug.utils import secure_filename
 from dotenv import load_dotenv
 import os
 import random
@@ -476,6 +477,13 @@ def register():
             flash('Username already exists')
             return redirect(url_for('register'))
             
+        # 4. Handle Optional License Upload
+        license_filename = None
+        file = request.files.get('license_doc')
+        if file and allowed_file(file.filename):
+            license_filename = secure_filename(f"{username}_license_{file.filename}")
+            file.save(os.path.join(app.config['UPLOAD_FOLDER'], license_filename))
+
         # Store pending registration in session
         session['pending_registration'] = {
             'username': username,
@@ -488,7 +496,8 @@ def register():
             'longitude': request.form.get('longitude'),
             'location_address': request.form.get('location_address'),
             'prc_no': request.form.get('prc_no'),
-            'dl_no': request.form.get('dl_no')
+            'dl_no': request.form.get('dl_no'),
+            'license_doc': license_filename
         }
 
         # Generate and send OTP automatically
@@ -584,6 +593,7 @@ def verify_otp():
                 longitude=lng_val,
                 prc_no=pending['prc_no'],
                 dl_no=pending['dl_no'],
+                license_doc=pending.get('license_doc'),
                 verified=False # Must be approved by admin
             )
             db.session.add(new_pharmacy)
