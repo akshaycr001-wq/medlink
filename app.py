@@ -909,6 +909,11 @@ def view_license(id):
     pharma = Pharmacy.query.get_or_404(id)
     if not pharma.license_doc:
         return "No document found"
+    
+    file_path = os.path.join(app.config['UPLOAD_FOLDER'], pharma.license_doc)
+    if not os.path.exists(file_path):
+        return "The license document file was not found on the server. Please ask the pharmacy to re-upload."
+
     return send_from_directory(app.config['UPLOAD_FOLDER'], pharma.license_doc)
 
 
