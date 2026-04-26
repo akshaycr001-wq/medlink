@@ -1356,6 +1356,41 @@ def add_stock():
     
     return jsonify({'success': True}) # Or redirect
 
+@app.route('/pharmacy/update_medicine/<int:id>', methods=['POST'])
+@login_required
+def update_medicine(id):
+    if current_user.role != 'pharmacy':
+        return jsonify({'error': 'Unauthorized'}), 403
+        
+    pharmacy = Pharmacy.query.filter_by(user_id=current_user.id).first()
+    if not pharmacy:
+        return jsonify({'error': 'Pharmacy not found'}), 404
+        
+    med = Medicine.query.filter_by(id=id, pharmacy_id=pharmacy.id).first()
+    if not med:
+        return jsonify({'error': 'Medicine not found'}), 404
+        
+    data = request.json
+    qty_str = data.get('qty')
+    price_str = data.get('price')
+    
+    try:
+        if qty_str is not None:
+            med.qty = int(float(qty_str))
+        if price_str is not None:
+            med.price = float(price_str)
+            
+        alert = SystemAlert(
+            pharmacy_id=pharmacy.id,
+            message=f"Updated {med.name}: Qty {med.qty}, Price ₹{med.price}",
+            type='success'
+        )
+        db.session.add(alert)
+        db.session.commit()
+        return jsonify({'success': True, 'name': med.name})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 400
+
 @app.route('/pharmacy/remove_stock/<int:id>', methods=['POST'])
 @csrf.exempt
 @login_required

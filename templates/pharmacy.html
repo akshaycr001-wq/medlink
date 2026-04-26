@@ -228,15 +228,22 @@
                         <div class="group relative p-6 rounded-[2rem] border transition-all"
                             :class="isExpiring(item.expiry) ? 'bg-red-50 border-red-100' : 'bg-white border-slate-100 hover:shadow-md'">
 
-                            <button @click="removeStock(item.id)"
-                                class="absolute top-4 right-4 text-slate-300 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-all">
-                                <i class="fas fa-trash-alt text-xs"></i>
-                            </button>
-
+                            <div
+                                class="absolute top-4 right-4 flex gap-2 opacity-0 group-hover:opacity-100 transition-all">
+                                <button @click="openEditModal(item)" class="text-slate-300 hover:text-teal-600">
+                                    <i class="fas fa-edit text-xs"></i>
+                                </button>
+                                <button @click="removeStock(item.id)" class="text-slate-300 hover:text-red-500">
+                                    <i class="fas fa-trash-alt text-xs"></i>
+                                </button>
+                            </div>
+                            <!-- ... existing content ... -->
                             <h4 class="font-bold text-slate-900" x-text="item.name"></h4>
-                            <div class="mt-2">
+                            <div class="mt-2 text-right">
                                 <p class="text-[10px] font-black text-slate-400 uppercase tracking-tighter"
-                                    x-text="'Qty: ' + item.qty + ' | Price: ₹' + (item.price || '0')"></p>
+                                    x-text="'Qty: ' + item.qty"></p>
+                                <p class="text-[10px] font-black text-slate-400 uppercase tracking-tighter"
+                                    x-text="'Price: ₹' + (item.price || '0')"></p>
                                 <p class="text-[10px] font-black mt-1 uppercase"
                                     :class="isExpiring(item.expiry) ? 'text-red-600' : 'text-teal-600'"
                                     x-text="'EXP: ' + item.expiry"></p>
@@ -247,6 +254,35 @@
             </div>
         </div>
     </main>
+
+    <!-- Edit Modal -->
+    <div x-show="editModal" x-cloak
+        class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[100] flex items-center justify-center p-6">
+        <div class="bg-white rounded-[3rem] max-w-md w-full p-10 shadow-2xl">
+            <h2 class="text-2xl font-black text-slate-900 mb-6">Edit Inventory</h2>
+
+            <div class="space-y-4 mb-8">
+                <div>
+                    <label class="text-[10px] font-black text-slate-400 uppercase ml-2 mb-1 block">New Quantity</label>
+                    <input type="number" x-model="editForm.qty"
+                        class="w-full px-6 py-4 bg-slate-50 border border-slate-200 rounded-2xl outline-none focus:border-teal-500 font-bold">
+                </div>
+                <div>
+                    <label class="text-[10px] font-black text-slate-400 uppercase ml-2 mb-1 block">New Price (₹)</label>
+                    <input type="number" x-model="editForm.price"
+                        class="w-full px-6 py-4 bg-slate-50 border border-slate-200 rounded-2xl outline-none focus:border-teal-500 font-bold">
+                </div>
+            </div>
+
+            <div class="grid grid-cols-2 gap-4">
+                <button @click="editModal = false"
+                    class="py-4 bg-slate-100 text-slate-600 rounded-2xl font-black uppercase text-xs tracking-widest hover:bg-slate-200">Cancel</button>
+                <button @click="submitEdit()"
+                    class="py-4 bg-teal-700 text-white rounded-2xl font-black uppercase text-xs tracking-widest shadow-lg shadow-teal-700/20 hover:bg-teal-800">Save
+                    Changes</button>
+            </div>
+        </div>
+    </div>
 
     <script id="inventory-data" type="application/json">{{ inventory_json | safe | default('[]') }}</script>
     <script id="alerts-data" type="application/json">{{ alerts_json | safe | default('[]') }}</script>
@@ -289,6 +325,8 @@
         function pharmacyApp() {
             return {
                 form: { name: '', alternative_name: '', qty: '', price: '', expiry: '' },
+                editForm: { id: null, qty: '', price: '' },
+                editModal: false,
 
                 inventory: injectedInventory,
                 alerts: injectedAlerts,
@@ -299,6 +337,41 @@
                     time: e.created_at,
                     phone: e.patient_phone
                 })),
+
+                openEditModal(item) {
+                    this.editForm.id = item.id;
+                    this.editForm.qty = item.qty;
+                    this.editForm.price = item.price;
+                    this.editModal = true;
+                },
+
+                async submitEdit() {
+                    try {
+                        const response = await fetch(`/pharmacy/update_medicine/${this.editForm.id}`, {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json',
+                                'X-CSRFToken': '{{ csrf_token() }}'
+                            },
+                            body: JSON.stringify(this.editForm)
+                        });
+                        const data = await response.json();
+                        if (data.success) {
+                            // Update local state
+                            const item = this.inventory.find(i => i.id === this.editForm.id);
+                            if (item) {
+                                item.qty = this.editForm.qty;
+                                item.price = this.editForm.price;
+                            }
+                            this.editModal = false;
+                            alert(`${data.name} updated successfully!`);
+                        } else {
+                            alert('Update failed: ' + data.error);
+                        }
+                    } catch (error) {
+                        alert('Error updating stock');
+                    }
+                },
 
                 init() {
                     console.log('Pharmacy Terminal Live');
