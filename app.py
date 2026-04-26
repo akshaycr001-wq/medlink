@@ -486,10 +486,42 @@ def emergency_rescue():
         # Reset the main one
         main_pharma.password = generate_password_hash('Medlink123', method='pbkdf2:sha256')
         main_pharma.email_verified = True
+        
+        # 3. PROFLE REPAIR: Ensure this user has their pharmacy profile linked
+        # If the user doesn't have a pharmacy_details link, look for ANY pharmacy with same email/name
+        if not main_pharma.pharmacy_details:
+             existing_p = Pharmacy.query.filter_by(shop_name=main_pharma.name).first()
+             if existing_p:
+                 existing_p.user_id = main_pharma.id
+        
         db.session.commit()
-        return f"SUCCESS: Account '{main_pharma.username}' restored. Use pharmacy login with password 'Medlink123'. (Renamed {len(all_users)-1} colliding accounts)"
+        return f"SUCCESS: Account '{main_pharma.username}' restored. Use login with password 'Medlink123'. (Fixed collisions: {len(all_users)-1}). <br><a href='/admin/database_audit'>Return to Audit</a>"
         
     return "User homeonellad not found."
+
+@app.route('/admin/database_audit')
+def database_audit():
+    # Emergency tool to see what is actually in the DB
+    try:
+        users = User.query.all()
+        pharmacies = Pharmacy.query.all()
+        
+        report = "<h2>Database Audit (Emergency)</h2>"
+        report += "<h3>Users Table:</h3><ul>"
+        for u in users:
+            report += f"<li>ID: {u.id} | Username: {u.username} | Email: {u.email} | Role: {u.role}</li>"
+        report += "</ul>"
+        
+        report += "<h3>Pharmacies Table:</h3><ul>"
+        for p in pharmacies:
+            report += f"<li>ID: {p.id} | UserID: {p.user_id} | Name: {p.shop_name} | Verified: {p.verified}</li>"
+        report += "</ul>"
+        
+        report += "<br><a href='/emergency_rescue_homeo'>Run HomeoNellad Rescue</a>"
+        
+        return report
+    except Exception as e:
+        return f"Audit Error: {e}"
 
 @app.route('/admin/restore_data')
 @login_required
@@ -503,16 +535,6 @@ def restore_data():
         import add_test_data
         
         print("Starting manual data restoration...")
-        seed_hospitals_real.seed_hospitals()
-        seed_massive_alternatives.seed_alternatives()
-        
-        # Also ensure test pharmacy exists
-        if User.query.filter_by(username='testpharmacy').first() is None:
-            add_test_data.add_test_data()
-            
-        return "SUCCESS: All core data (Hospitals, Ambulances, Alternatives, Test Data) has been restored/updated."
-    except Exception as e:
-        return f"Restore Error: {e}", 500
         seed_hospitals_real.seed_hospitals()
         seed_massive_alternatives.seed_alternatives()
         
