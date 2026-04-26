@@ -267,9 +267,14 @@ def index():
 @limiter.limit("5 per minute")  # Rate limit login attempts
 def login():
     if request.method == 'POST':
-        identifier = request.form.get('identifier')
+        identifier = (request.form.get('identifier') or '').strip()
         password = request.form.get('password')
         user = User.query.filter(or_(User.username == identifier, User.email == identifier)).first()
+        
+        if not user:
+            print(f"DEBUG: Login failed - Account not found for identifier: {identifier}")
+        else:
+            print(f"DEBUG: Login attempt for user: {user.username} (Role: {user.role})")
         
         if user:
             # Strip whitespace to avoid common login issues
@@ -431,9 +436,12 @@ def verify_email(token):
 @limiter.limit("3 per minute")  # Stricter rate limit for admin login
 def admin_login():
     if request.method == 'POST':
-        username = request.form.get('username')
+        username = (request.form.get('username') or '').strip()
         password = request.form.get('password')
         user = User.query.filter_by(username=username).first()
+        
+        if not user:
+            print(f"DEBUG: Admin login failed - Account not found for identifier: {username}")
         
         if user:
             if check_password_hash(user.password, password.strip()):
