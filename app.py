@@ -4,6 +4,7 @@ from dotenv import load_dotenv
 import os
 import random
 import re
+import secrets
 from flask_mail import Mail, Message
 
 # OTP Storage (In-memory for demo; use Redis or DB for production)
@@ -13,7 +14,7 @@ OTP_STORE = {}
 load_dotenv()
 
 from flask_sqlalchemy import SQLAlchemy
-from sqlalchemy import or_
+from sqlalchemy import or_, func
 from flask_login import LoginManager, UserMixin, login_user, login_required, logout_user, current_user
 from flask_migrate import Migrate
 from flask_wtf.csrf import CSRFProtect
