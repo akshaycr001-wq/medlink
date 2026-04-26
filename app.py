@@ -529,10 +529,40 @@ def database_audit():
         report += "</ul>"
         
         report += "<br><a href='/emergency_rescue_homeo'>Run HomeoNellad Rescue</a>"
+        report += "<br><br><a href='/admin/cleanup_old_data' style='color: red' onclick='return confirm(\"Are you sure? This will PERMANENTLY delete all colliding/old accounts and orphaned profiles seen above.\")'>🔥 Run Database Cleanup (Dangerous)</a>"
         
         return report
     except Exception as e:
         return f"Audit Error: {e}"
+
+@app.route('/admin/cleanup_old_data')
+def cleanup_old_data():
+    # Emergency tool to remove colliding and orphaned accounts
+    try:
+        # 1. Find users renamed by the rescue tool (start with 'old_')
+        colliding_users = User.query.filter(User.email.like('old_%')).all()
+        deleted_users_count = 0
+        
+        for u in colliding_users:
+            # Delete associated pharmacy if exists (manual cascade avoid)
+            Pharmacy.query.filter_by(user_id=u.id).delete()
+            db.session.delete(u)
+            deleted_users_count += 1
+            
+        # 2. Cleanup orphaned pharmacies (no valid user)
+        # This can happen if a user was deleted but pharmacy remained
+        all_pharms = Pharmacy.query.all()
+        deleted_pharms_count = 0
+        for p in all_pharms:
+            u = User.query.get(p.user_id)
+            if not u:
+                db.session.delete(p)
+                deleted_pharms_count += 1
+        
+        db.session.commit()
+        return f"CLEANUP SUCCESS: Deleted {deleted_users_count} redundant accounts and {deleted_pharms_count} orphaned pharmacy profiles. <br><a href='/admin/database_audit'>Return to Audit</a>"
+    except Exception as e:
+        return f"Cleanup Error: {e}"
 
 @app.route('/admin/restore_data')
 @login_required
