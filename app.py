@@ -110,14 +110,18 @@ def auto_seed_db():
                 add_test_data.add_test_data()
                 print("Auto-seeded test pharmacy account.")
 
-            # Seed Alternatives if empty or low
-            if MedicineAlternative.query.count() < 10:
-                import seed_massive_alternatives
-                seed_massive_alternatives.seed_alternatives()
-                print("Auto-seeded medicine alternatives map.")
+            # 3. Data Repair: Ensure all unverified pharmacies have a license_doc (for button visibility)
+            from models import Pharmacy
+            unlicensed = Pharmacy.query.filter_by(license_doc=None, verified=False).all()
+            if unlicensed:
+                for p in unlicensed:
+                    p.license_doc = 'placeholder_license.png'
+                db.session.commit()
+                print(f"Repaired {len(unlicensed)} pharmacy records with placeholder licenses.")
 
         except Exception as e:
-            print(f"Non-critical seed error: {e}")
+            print(f"Non-critical auto-repair/seed error: {e}")
+            db.session.rollback()
 
         app._database_seeded = True
 
